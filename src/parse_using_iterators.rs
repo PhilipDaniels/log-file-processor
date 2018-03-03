@@ -54,6 +54,7 @@ pub fn parse_source_and_msg(buffer: &[u8], pd: &mut ParsedData, finder: &needle:
     let mut it = buffer[source_a..].iter();
     pd.source = (source_a, source_a + it.position(|&x| x == b' ').unwrap());
     
+    // This -2 assumes there is a \n before the word "Source". I should fix it.
     pd.message = (start_point + 4, source_a - "Source=".len() - 2);
 }
 
