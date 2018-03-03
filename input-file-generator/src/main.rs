@@ -14,11 +14,12 @@ fn main() {
     let mut writer = BufWriter::new(f);
     let mut rng = rand::thread_rng();
 
-    // Note the \n before Source due to a bug in the main parser.
+    // The files I have from work have a \n before Source, but the parser has been adjusted to
+    // cope with or without such a character there.
     for i in 0..num_lines {
         write!(writer,
             "2018-01-23 09:12:32.{0:07} | MachineName=name.of.computer | AppName=Something.Host | pid={1} | \
-tid={2} | {3} | {4}\n Source={5} {6} {7} {8} {9}\r\n",
+tid={2} | {3} | {4} Source={5} {6} {7} {8} {9}\r\n",
             i,
             i % 20,
             100 + (i % 3),
