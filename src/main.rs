@@ -3,22 +3,14 @@ extern crate needle;
 extern crate elapsed;
 extern crate memchr;
 
-mod output;
-mod logfile_iterator;
 mod fast_logfile_iterator;
-mod by_raw_indexing;
-mod by_iterators;
-mod by_memchr;
-mod by_channels;
 mod parse_using_iterators;
+mod by_channels;
 
 use elapsed::measure_time;
 use std::fs::File;
 use std::io::{BufReader,BufWriter};
 use std::io::prelude::Write;
-use by_raw_indexing::process_using_raw_indexing;
-use by_iterators::process_using_iterators;
-use by_memchr::process_using_memchr;
 use by_channels::process_using_channels;
 
 // The log files this program is designed to parse consist of lines separated by \r\n, however \n
@@ -72,27 +64,10 @@ fn init() -> (BufReader<File>, BufWriter<File>) {
 }
 
 fn main() {
-    // let (reader, writer) = init();
-    // let (elapsed, _) = measure_time(|| {
-    //     process_using_raw_indexing(reader, writer)
-    // });
-    // println!("process_using_raw_indexing elapsed = {}", elapsed);
-
-    // let (reader, writer) = init();
-    // let (elapsed, _) = measure_time(|| {
-    //     process_using_iterators(reader, writer)
-    // });
-    // println!("process_using_iterators elapsed = {}", elapsed);
-
-    // let (reader, writer) = init();
-    // let (elapsed, _) = measure_time(|| {
-    //     process_using_memchr(reader, writer)
-    // });
-    // println!("process_using_memchr elapsed = {}", elapsed);
-
     let (reader, writer) = init();
     let (elapsed, _) = measure_time(|| {
         process_using_channels(reader, writer)
     });
+
     println!("process_using_channels elapsed = {}", elapsed);
 }
