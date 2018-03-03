@@ -1,0 +1,4 @@
+# See https://doc.rust-lang.org/cargo/reference/config.html
+
+[build]
+rustflags = ["-C",  "target-cpu=native"]

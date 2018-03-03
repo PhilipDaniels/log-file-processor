@@ -1,5 +1,5 @@
 [package]
-name = "logproc"
+name = "log-file-processor"
 version = "0.1.0"
 authors = ["Philip Daniels <Philip.Daniels@landmark.co.uk>"]
 
@@ -8,7 +8,18 @@ regex = "0.2"
 needle = { git = "https://github.com/archer884/needle" }
 elapsed = "0.1"
 memchr = "2.0.1"
+input-file-generator = { path = "input-file-generator" }
 
+# Optimize the release mode builds as much as we can.
+# Also see .cargo/config to make a cpu-native build.
 [profile.release]
 lto = true
 codegen-units = 1
+
+[workspace]
+members = [
+    "input-file-generator"
+]
+
+
+# 307k

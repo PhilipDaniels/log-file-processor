@@ -17,6 +17,10 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "input-file-generator"
+version = "0.1.0"
+
+[[package]]
 name = "lazy_static"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -43,10 +47,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "logproc"
+name = "log-file-processor"
 version = "0.1.0"
 dependencies = [
  "elapsed 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "input-file-generator 0.1.0",
  "memchr 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "needle 0.1.2 (git+https://github.com/archer884/needle)",
  "regex 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
