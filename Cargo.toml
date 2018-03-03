@@ -1,0 +1,13 @@
+[package]
+name = "logproc"
+version = "0.1.0"
+authors = ["Philip Daniels <Philip.Daniels@landmark.co.uk>"]
+
+[dependencies]
+regex = "0.2"
+needle = { git = "https://github.com/archer884/needle" }
+elapsed = "0.1"
+memchr = "2.0.1"
+
+[profile.release]
+lto = true
