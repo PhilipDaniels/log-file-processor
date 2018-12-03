@@ -1,9 +1,10 @@
-extern crate regex;
-extern crate needle;
-extern crate elapsed;
-extern crate memchr;
+//extern crate regex;
+//extern crate needle;
+//extern crate elapsed;
+//extern crate memchr;
 
-mod fast_logfile_iterator;
+/*
+
 mod parse_using_iterators;
 mod by_channels;
 
@@ -70,4 +71,80 @@ fn main() {
     });
 
     println!("process_using_channels elapsed = {}", elapsed);
+}
+
+*/
+
+use std::path::PathBuf;
+use std::fs;
+use std::fs::File;
+use std::io::{BufReader,BufWriter};
+use std::io::prelude::Write;
+use glob::glob;
+use rayon::prelude::*;
+
+mod fast_logfile_iterator;
+
+struct Config {
+    input_file_specs: Vec<String>,
+    input_files: Vec<PathBuf>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            input_file_specs: vec!["*.log".to_string()],
+            input_files: vec![]
+        }
+    }
+}
+
+fn main() {
+    let mut config = Config::default();
+
+    // Determine available input files.
+    for path in &config.input_file_specs {
+        for entry in glob(&path).expect("Failed to read glob pattern.") {
+            match entry {
+                Ok(path) => if !config.input_files.contains(&path) {
+                    config.input_files.push(path)
+                },
+                Err(e) => {}
+            }
+        }
+    }
+    
+    // Echo confirmation of files back to the user.
+    if config.input_files.is_empty() {
+        println!("Did not detect any input files.");
+    } else {
+        for path in &config.input_files {
+            let len = fs::metadata(&path).expect("Can get file meta data").len();
+            println!("Found file {:?}, {} bytes.", path.display(), len);
+        }
+    }
+
+    let total_bytes: u64 = config.input_files.par_iter()
+        .map(process_log_file)
+        .sum();
+}
+
+fn process_log_file(path: &PathBuf) -> u64 {
+    println!("Opening file {:?}", path);
+
+    let out_path = format!("{}.out", path.display());
+    let in_file = File::open(&path).expect("Could not open the input log file");
+    let out_file = File::create(&out_path).expect(&format!("Could not open output file {}", &out_path));
+    println!("\nProcessing {} to output file {}", &path.display(), &out_path);
+
+    let reader = BufReader::new(in_file);
+    let mut writer = BufWriter::new(out_file);
+
+    for log_line in fast_logfile_iterator::FastLogFileIterator::new(reader) {
+        println!("Read line {:?} from {}", log_line, path.display());
+    }
+
+    println!("Finished processing file {:?}", path);
+
+    0
 }

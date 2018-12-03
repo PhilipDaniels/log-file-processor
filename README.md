@@ -8,3 +8,70 @@ The aim was to go as fast as possible while keeping clear code.
 
 A branch f-experiments contains various early variants, the master
 branch has been pruned down to just my chosen one.
+
+## Next Version
+
+
+[Defaults.Matchers]
+; Each one is a Regex. The names of the matchers define column names.
+; What if some are position dependent?; Eg the log level
+; The matches should be case-insensitive.
+
+; I think we need the ability to split the message into (prelude, message, kvps)
+; We will probably need a group so that we can extract the matched value.
+; Special columns always defined: OriginalSource and Message
+Timestamp = "^{\d}4 ..."
+MachineName = "MachineName\w?=\w?
+AppNamme = "..."
+PID = "..."
+TID = "..."
+LogLevel = "..."
+CorrelationKey = "...."
+Source = ""
+SysRef = "SysRef=[a-zA-Z0.9]{8}"
+CallRecorderExecutionTime = "..."
+
+
+; Specifies all the default settings.
+[Defaults]
+OutputColumns = "Timestamp, MachineName, AppName, SysRef ..."
+Filters = []
+From =  ; 1900-01-01
+To =    ; 2099-01-01
+SourceFiles = "*.log"
+KibanaUrls = ""
+SplunkUrls = ""
+
+
+
+
+[UAT2Slowdown]
+Filters = [
+    "SysRef=some regex"
+    ]     ; The first part is a field name, the second part a regex. Which can just be "QT123456" to match a literal.
+
+
+
+Algorithm
+=========
+for each file (in parallel)
+    for each block of 1000 lines (in parallel)
+        split each line into (prelude, message, kvps)
+        If there are any filters specified, extract those fields first and check them, discard the line if necessary
+        Extract remaining matches
+        Trim whitespace from ends of each matched value
+        Form an output line
+
+
+
+
+Crates
+======
+
+rpassword (for reading)
+https://github.com/hwchen/keyring-rs ?
+
+Polyphase merge (need to write)
+Persistent secure credentials
+indicatif for progress bars
+
