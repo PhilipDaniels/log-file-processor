@@ -13,7 +13,7 @@ impl<'a, T> FastLogFileIterator<T> {
 }
 
 impl <T: io::BufRead> Iterator for FastLogFileIterator<T> {
-    type Item = (usize, String);
+    type Item = (u64, String);
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut buffer = Vec::with_capacity(1024);
@@ -35,6 +35,6 @@ impl <T: io::BufRead> Iterator for FastLogFileIterator<T> {
         // We assume we can convert to UTF-8. Makes downstream usage easier.
         let s = String::from_utf8(buffer).expect("Found an invalid UTF-8 sequence.");
 
-        Some((bytes_read, s))
+        Some((bytes_read as u64, s))
     }
 }
