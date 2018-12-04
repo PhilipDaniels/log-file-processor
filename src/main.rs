@@ -117,34 +117,34 @@ fn main() {
     // Echo confirmation of files back to the user.
     if config.input_files.is_empty() {
         println!("Did not detect any input files.");
-    } else {
-        for path in &config.input_files {
-            let len = fs::metadata(&path).expect("Can get file meta data").len();
-            println!("Found file {:?}, {} bytes.", path.display(), len);
-        }
     }
 
-    let total_bytes: u64 = config.input_files.par_iter()
+    let total_bytes : usize = config.input_files.par_iter()
         .map(process_log_file)
         .sum();
+
+    println!("Processed {} byte in total", total_bytes);
 }
 
-fn process_log_file(path: &PathBuf) -> u64 {
+fn process_log_file(path: &PathBuf) -> usize {
     println!("Opening file {:?}", path);
 
+    let input_len = fs::metadata(&path).expect("Can get file meta data").len();
     let out_path = format!("{}.out", path.display());
     let in_file = File::open(&path).expect("Could not open the input log file");
     let out_file = File::create(&out_path).expect(&format!("Could not open output file {}", &out_path));
-    println!("\nProcessing {} to output file {}", &path.display(), &out_path);
+    println!("Processing {} bytes from {} to output file {}", input_len, &path.display(), &out_path);
 
     let reader = BufReader::new(in_file);
     let mut writer = BufWriter::new(out_file);
 
-    for log_line in fast_logfile_iterator::FastLogFileIterator::new(reader) {
-        println!("Read line {:?} from {}", log_line, path.display());
+    let mut total_bytes_read = 0;
+    for (bytes_read, log_line) in fast_logfile_iterator::FastLogFileIterator::new(reader) {
+        //println!("Read line {:?} from {}", log_line, path.display());
+        total_bytes_read += bytes_read;
     }
 
-    println!("Finished processing file {:?}", path);
+    println!("Finished processing file {:?}, read {} bytes", path, total_bytes_read);
 
-    0
+    total_bytes_read
 }

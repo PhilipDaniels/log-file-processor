@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 glob = "0.2"
 rayon = "1.0.3"
+indicatif = "0.10.2"
 
 #regex = "0.2"
 #needle = { git = "https://github.com/archer884/needle" }
@@ -24,6 +25,3 @@ codegen-units = 1
 members = [
     "input-file-generator"
 ]
-
-
-# 307k
