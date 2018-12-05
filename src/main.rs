@@ -39,7 +39,6 @@ fn main() {
 }
 
 fn process_log_file(pb: ProgressBar, input_file: InputFile) {
-
     let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
     let output_file_handle = File::create(&input_file.output_path).expect(&format!("Could not open output file {}", &input_file.output_path));
 
@@ -48,30 +47,26 @@ fn process_log_file(pb: ProgressBar, input_file: InputFile) {
 
     let start_time = Instant::now();
 
-    let mut total_bytes_read = 0;
+    let mut bytes_read_so_far = 0;
     for (bytes_read, log_line) in fast_logfile_iterator::FastLogFileIterator::new(reader) {
-        total_bytes_read += bytes_read;
+        bytes_read_so_far += bytes_read;
         pb.inc(bytes_read);
-        let msg = format!("{} / {}", HumanBytes(total_bytes_read), HumanBytes(input_file.length as u64));
+        let msg = format!("{} / {}", HumanBytes(bytes_read_so_far), HumanBytes(input_file.length as u64));
         pb.set_message(&msg);
         let wait = Duration::from_micros(100);
         thread::sleep(wait);
     }
 
-    pb.set_style(ProgressStyle::default_bar().template(TEMPLATE_WITHOUT_ETA).progress_chars(PROGRESS_CHARS));
-    pb.finish_with_message(&format!("Done - {} in {}", HumanBytes(total_bytes_read), HumanDuration(start_time.elapsed())));
+    pb.set_style(make_progress_bar_style(false));
+    pb.finish_with_message(&format!("Done - {} in {}", HumanBytes(bytes_read_so_far), HumanDuration(start_time.elapsed())));
 }
 
 
 
 
-const TEMPLATE_WITH_ETA   : &str = "{prefix:.bold}▕{bar:50.cyan}▏{msg}  ({eta})";
-const TEMPLATE_WITHOUT_ETA: &str = "{prefix:.bold}▕{bar:50.cyan}▏{msg}";
-const PROGRESS_CHARS      : &str = "█▉▊▋▌▍▎▏  ";
-
 fn make_progress_bar(longest_filename_length: usize, mp: &MultiProgress, input_file: &InputFile) -> ProgressBar {
     let pb = mp.add(ProgressBar::new(input_file.length as u64));
-    pb.set_style(ProgressStyle::default_bar().template(TEMPLATE_WITH_ETA).progress_chars(PROGRESS_CHARS));
+    pb.set_style(make_progress_bar_style(true));
 
     let prefix = format!("{:>width$}: ", input_file.filename_only_as_string, width=longest_filename_length + 1);
     pb.set_prefix(&prefix);
@@ -81,4 +76,11 @@ fn make_progress_bar(longest_filename_length: usize, mp: &MultiProgress, input_f
     pb.set_draw_delta(input_file.length as u64 / 100); 
 
     pb
+}
+
+fn make_progress_bar_style(with_eta: bool) -> ProgressStyle {
+    const TEMPLATE_WITH_ETA   : &str = "{prefix:.bold}▕{bar:50.cyan}▏{msg}  ({eta})";
+    const TEMPLATE_WITHOUT_ETA: &str = "{prefix:.bold}▕{bar:50.cyan}▏{msg}";
+    const PROGRESS_CHARS      : &str = "█▉▊▋▌▍▎▏  ";
+    ProgressStyle::default_bar().template(if with_eta { TEMPLATE_WITH_ETA } else {TEMPLATE_WITHOUT_ETA }).progress_chars(PROGRESS_CHARS)
 }
