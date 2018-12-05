@@ -81,6 +81,5 @@ fn make_progress_bar(longest_filename_length: usize, mp: &MultiProgress, input_f
 fn make_progress_bar_style(with_eta: bool) -> ProgressStyle {
     const TEMPLATE_WITH_ETA   : &str = "{prefix:.bold}▕{bar:50.cyan}▏{msg}  ({eta})";
     const TEMPLATE_WITHOUT_ETA: &str = "{prefix:.bold}▕{bar:50.cyan}▏{msg}";
-    const PROGRESS_CHARS      : &str = "█▉▊▋▌▍▎▏  ";
-    ProgressStyle::default_bar().template(if with_eta { TEMPLATE_WITH_ETA } else {TEMPLATE_WITHOUT_ETA }).progress_chars(PROGRESS_CHARS)
+    ProgressStyle::default_bar().template(if with_eta { TEMPLATE_WITH_ETA } else {TEMPLATE_WITHOUT_ETA }).progress_chars("█▉▊▋▌▍▎▏  ")
 }

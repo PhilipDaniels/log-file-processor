@@ -1,3 +1,4 @@
+#[derive(Clone, Debug)]
 pub struct Config {
     pub input_file_specs: Vec<String>,
 }

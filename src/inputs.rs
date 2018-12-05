@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use crate::config::Config;
 
+#[derive(Default, Clone, Debug)]
 pub struct InputFile {
     pub path: PathBuf,
     pub length: usize,
@@ -30,16 +31,9 @@ impl InputFile {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 pub struct Inputs {
     pub input_files: Vec<InputFile>,
-}
-
-impl Default for Inputs {
-    fn default() -> Self {
-        Inputs {
-            input_files: vec![]
-        }
-    }
 }
 
 impl Inputs {

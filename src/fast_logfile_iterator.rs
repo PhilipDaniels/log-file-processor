@@ -4,7 +4,7 @@ pub struct FastLogFileIterator<T> {
     reader: T
 }
 
-impl<'a, T> FastLogFileIterator<T> {
+impl<T> FastLogFileIterator<T> {
     pub fn new(reader: T) -> FastLogFileIterator<T> {
         FastLogFileIterator { 
             reader: reader
