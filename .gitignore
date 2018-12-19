@@ -1,5 +1,7 @@
-
 /target/
 **/*.rs.bk
 *.log
+*.log.bak
 *.log.out
+*.log.csv
+/ExampleLogs/
