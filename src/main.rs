@@ -11,11 +11,12 @@ use unicase::UniCase;
 mod fast_logfile_iterator;
 mod config;
 mod inputs;
-mod line_parser;
+mod output;
+mod parsed_line;
 mod regexes;
 use crate::config::{Config};
 use crate::inputs::{Inputs, InputFile, Column, is_date_column};
-use crate::line_parser::ParsedLine;
+use crate::parsed_line::ParsedLine;
 
 /* TODOs
 =============================================================================
@@ -23,8 +24,9 @@ use crate::line_parser::ParsedLine;
 - If a column is not in KVPs, attempt to extract from the message.
 - If column is a date/datetime, attempt to reformat the raw string.
 - Sort (the contents of) the output files.
-- Test inlining performance. 
-- Test swapping the 'limit' checks.
+- Perf: Test inlining performance. 
+- Perf: Test swapping the 'limit' checks.
+- Perf: More parallelism while processing an individual file.
 - Allow alternate names for columns (AppName, ApplicationName)
 - Allow custom regex extractors for columns.
 - Filter: from/to dates
@@ -135,53 +137,70 @@ fn process_log_file(pb: ProgressBar, input_file: InputFile, columns: &[Column]) 
 }
 
 fn process_line(columns: &[Column], line: String,  writer: &mut Writer<File>) {
-    let mut data = Vec::new();
-    
     let parsed_line = ParsedLine::new(&line);
+
     if parsed_line.is_err() {
-        // TODO: Log an error or something. For now, just write a blank record so it's obvious something is wrong.
+        let data = vec![""];
         writer.write_record(&data).expect("Writing a CSV record should always succeed.");
         return;
     }
-    let parsed_line = parsed_line.unwrap();
-    
 
+    let parsed_line = parsed_line.unwrap();
+    // let data = output::make_output_record(&parsed_line, columns);
+    
+    // The below code works. But if I try to pull it out into a separate function
+    // Rust will not compile it.
+    let mut data = Vec::new();
+    
     for column in columns {
         match column.name.as_str() {
             config::LOG_DATE => data.push(parsed_line.log_date),
             config::LOG_LEVEL => data.push(parsed_line.log_level),
             config::MESSAGE => data.push(&parsed_line.message),
+
             _ => {
                 let ci_comparer = UniCase::new(column.name.as_str());
                 match parsed_line.kvps.get(&ci_comparer) {
-                    Some(val) => data.push(val),
-                    None => { 
-                        // TODO: Fallback position: look for the column using a regex.
-                        data.push("");
-                     }
+                    Some(val) => {
+                        let x = val.as_ref();
+                        data.push(x);
+                    },
+                    None => data.push(""),
                 }
             },
         }
-
-        // let captures = column.regex.captures(&line);
-        // if captures.is_none() {
-        //     data.push("".to_string());
-        //     continue;
-        // }
-        // let captures = captures.unwrap();
-
-        // let text = if is_date_column(&column.name) {
-        //     let capture_names = column.regex.capture_names().collect::<Vec<_>>();
-        //     cleanup_slice(&extract_date(captures, &capture_names)).to_string()
-        // } else {
-        //     cleanup_slice(extract_kvp(captures)).to_string()
-        // };
-
-        // data.push(text);
     }
 
     writer.write_record(&data).expect("Writing a CSV record should always succeed.");
 }
+
+pub fn make_output_record<'p, 't, 'c>(parsed_line: &'p ParsedLine<'t>, columns: &'c [Column]) -> Vec<&'t str> {
+    let mut data = Vec::new();
+    
+    for column in columns {
+        match column.name.as_str() {
+            config::LOG_DATE => data.push(parsed_line.log_date),
+            config::LOG_LEVEL => data.push(parsed_line.log_level),
+            config::MESSAGE => data.push(&parsed_line.message),
+
+            _ => {
+                let ci_comparer = UniCase::new(column.name.as_str());
+                match parsed_line.kvps.get(&ci_comparer) {
+                    // This is the problem here. To make it explicit:
+                    //     val is a "&'t Cow<'t, str>" and x is "&'t str"
+                    Some(val) => {
+                        let x = val.as_ref();
+                        data.push(x);
+                    },
+                    None => data.push(""),
+                }
+            },
+        }
+    }
+
+    data
+}
+
 
 fn extract_date(captures: Captures, capture_names: &[Option<&str>]) -> String {
     // Typical values for capture_names are:

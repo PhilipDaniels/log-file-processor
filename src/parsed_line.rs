@@ -5,7 +5,6 @@ use unicase::UniCase;
 /*
 Notes
 =====
-
 - The framework replaces any \r\n in messages with \n
   Therefore a message is always terminated by a \r\n - 0D 0A - pair.
 
