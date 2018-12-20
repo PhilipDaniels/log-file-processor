@@ -1,9 +1,13 @@
+/// This module contains the representation of a Key-Value pair as parsed from the original line,
+/// and some utility methods for doing that parsing.
+
 use std::borrow::Cow;
 use crate::parse_utils::*;
 
+/// A Vec is probably as fast as a HashMap for the small number of KVPs we expect to see.
 #[derive(Debug, Default)]
 pub struct KVPCollection<'t> {
-    kvps: Vec::<KVPStrings<'t>>
+    kvps: Vec<KVPStrings<'t>>
 }
 
 impl<'t> KVPCollection<'t> {
@@ -18,7 +22,20 @@ impl<'t> KVPCollection<'t> {
         self.kvps.push(new_kvp);
     }
 
+    /// Gets a value, looking it up case-insensitively by the specified key.
+    /// Returns None if there is no value for that key.
+    pub fn get_value(&self, key: &str) -> Option<&str> {
+        for kvp in &self.kvps {
+            if kvp.key.eq_ignore_ascii_case(key) {
+                return Some(&kvp.value);
+            }
+        }
+
+        None
+    }
+
     /// Gets a KVP, looking it up case-insensitively by the specified key.
+    #[cfg(test)]
     pub fn get(&self, key: &str) -> Option<&KVPStrings> {
         for kvp in &self.kvps {
             if kvp.key.eq_ignore_ascii_case(key) {
@@ -30,26 +47,27 @@ impl<'t> KVPCollection<'t> {
     }
 
     /// Gets a value, looking it up case-insensitively by the specified key.
-    pub fn get_value(&self, key: &str) -> Option<&str> {
+    /// Panics if the key is not in the collection. Helps keep tests short.
+    #[cfg(test)]
+    pub fn value(&self, key: &str) -> &str {
         for kvp in &self.kvps {
             if kvp.key.eq_ignore_ascii_case(key) {
-                return Some(&kvp.value);
+                return &kvp.value;
             }
         }
 
-        None
+        panic!("No value found for key {}", key)
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.kvps.len()
     }
 
-    // pub fn contains(&self, key: &str) -> bool {
-    //     match self.get(key) {
-    //         Some(_) => true,
-    //         None => false
-    //     }
-    // }
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.kvps.is_empty()
+    }
 }
 
 /// Represents a KVP as string slices from the original line.
@@ -57,12 +75,12 @@ impl<'t> KVPCollection<'t> {
 /// cleanup, e.g. if the original value contained embedded newlines.
 #[derive(Debug, Default)]
 pub struct KVPStrings<'t> {
-    key: &'t str,
-    value: Cow<'t, str>,
+    pub key: &'t str,
+    pub value: Cow<'t, str>
 }
 
 /// Represents a KVP as it is parsed out of a line. This is low-level information
-/// internal to this module and is used to construct a `KVPStrings` object.
+/// and is used to construct a `KVPStrings` object.
 #[derive(Debug, Default)]
 pub struct KVPParseData {
     key_start_index: usize,
@@ -82,15 +100,15 @@ impl KVPParseData {
         self.value_start_index > self.key_end_index && self.value_end_index >= self.value_start_index
     }
 
-    pub fn get_kvp_slices<'t>(&self, line: &'t str, chars: &[(usize, char)]) -> (&'t str, Cow<'t, str>) {
-        let k = unchecked_slice(line, &chars, self.key_start_index, self.key_end_index);
-        let v = if self.has_value() {
+    pub fn get_kvp_strings<'t>(&self, line: &'t str, chars: &[(usize, char)]) -> KVPStrings<'t> {
+        let key = unchecked_slice(line, &chars, self.key_start_index, self.key_end_index);
+        let value = if self.has_value() {
             checked_slice(line, &chars, self.value_start_index, self.value_end_index)
         } else {
             "".into()
         };
 
-        (k,v)
+        KVPStrings { key, value }
     }
 
     pub fn max_index(&self) -> usize {
@@ -109,31 +127,6 @@ impl KVPParseData {
         self.key_start_index
     }
 }
-
-pub fn next_kvp2<'t>(line: &'t str, chars: &'t [(usize, char)], current: usize, limit: usize) -> Option<KVPStrings<'t>> {
-    match next_kvp(chars, current, limit) {
-        Some(kvp) => {
-            let (key, value) = kvp.get_kvp_slices(line, &chars);
-            Some(KVPStrings { key, value })
-        },
-
-        None => None
-    }
-}
-
-pub fn prev_kvp2<'t>(line: &'t str, chars: &'t [(usize, char)], current: usize, limit: usize) -> Option<KVPStrings<'t>> {
-    match prev_kvp(chars, current, limit) {
-        Some(kvp) => {
-            let (key, value) = kvp.get_kvp_slices(line, &chars);
-            Some(KVPStrings { key, value })
-        },
-
-        None => None
-    }
-}
-
-
-
 
 /// Attempts to extract a Key-Value pair starting at current and reading forward. There are
 /// several possible forms of a KVP:
@@ -312,14 +305,6 @@ pub fn prev_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option
     }
 }
 
-
-
-
-
-
-
-
-
 #[cfg(test)]
 mod kvp_collection_tests {
     use super::*;
@@ -331,7 +316,7 @@ mod kvp_collection_tests {
         sut.insert(KVPStrings { key: "car", value: "volvo".into() });
         
         assert_eq!(sut.len(), 1);
-        assert_eq!(sut.get_value("car").unwrap(), "ford");
+        assert_eq!(sut.value("car"), "ford");
     }
 
     #[test]
@@ -341,8 +326,8 @@ mod kvp_collection_tests {
         sut.insert(KVPStrings { key: "truck", value: "volvo".into() });
         
         assert_eq!(sut.len(), 2);
-        assert_eq!(sut.get_value("car").unwrap(), "ford");
-        assert_eq!(sut.get_value("truck").unwrap(), "volvo");
+        assert_eq!(sut.value("car"), "ford");
+        assert_eq!(sut.value("truck"), "volvo");
     }
 
     #[test]
@@ -351,7 +336,7 @@ mod kvp_collection_tests {
         sut.insert(KVPStrings { key: "car", value: "ford".into() });
 
         assert_eq!(sut.len(), 1);
-        assert_eq!(sut.get_value("car").unwrap(), "ford");
-        assert_eq!(sut.get_value("Car").unwrap(), "ford");
+        assert_eq!(sut.value("car"), "ford");
+        assert_eq!(sut.value("Car"), "ford");
     }
 }

@@ -1,5 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use crate::regexes;
+use crate::parse_utils;
 
 /// The config module represents the program's configuration. It is intended to be
 /// the home of the command line and config file parsing. The top-level struct is
@@ -7,10 +8,6 @@ use crate::regexes;
 ///
 /// Before execution begins, the Config is processed into 'Inputs' (see the inputs
 /// module) which represents the actual set of files to be processed.
-
-pub const LOG_DATE: &str = "LogDate";
-pub const LOG_LEVEL: &str = "LogLevel";
-pub const MESSAGE: &str = "Message";
 
 /// This is the top-level struct for this module.
 #[derive(Clone, Debug)]
@@ -45,8 +42,8 @@ impl Default for OutputFileSpecification {
             alternate_column_names: HashMap::new(),
 
             columns: vec![
-                LOG_DATE.to_string(),
-                LOG_LEVEL.to_string(),
+                parse_utils::LOG_DATE.to_string(),
+                parse_utils::LOG_LEVEL.to_string(),
                 "PID".to_string(),
                 "TID".to_string(),
                 "MachineName".to_string(),
@@ -55,7 +52,7 @@ impl Default for OutputFileSpecification {
                 "Action".to_string(),
                 "CorrelationKey".to_string(),
                 "CallRecorderExecutionTime".to_string(),
-                MESSAGE.to_string(),
+                parse_utils::MESSAGE.to_string(),
                 // "Source".to_string(),
                 // "SourceInstance".to_string(),
                 // "SourceInfo".to_string(),

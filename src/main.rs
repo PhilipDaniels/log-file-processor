@@ -21,7 +21,6 @@ use crate::parsed_line::ParsedLine;
 
 /* TODOs
 =============================================================================
-- Squash!
 - If a column is not in KVPs, attempt to extract from the message.
 - If column is a date/datetime, attempt to reformat the raw string.
 - Sort (the contents of) the output files.

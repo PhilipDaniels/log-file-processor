@@ -1,8 +1,6 @@
-use std::collections::HashMap;
 use std::borrow::Cow;
-use unicase::UniCase;
 use crate::parse_utils::*;
-use crate::kvps::{next_kvp, prev_kvp};
+use crate::kvps::{KVPCollection, next_kvp, prev_kvp};
 /*
 Notes
 =====
@@ -64,10 +62,112 @@ pub struct ParsedLine<'t> {
     pub log_date: &'t str,
     pub log_level: &'t str,
     pub message: Cow<'t, str>,
-    pub kvps: HashMap<UniCase<&'t str>, Cow<'t, str>>,
-//    pub kvps2: KVPCollection<'t>
+    pub kvps: KVPCollection<'t>
 }
 
+impl<'t, 'k> ParsedLine<'t> {
+    pub fn new(line: &'t str) -> Result<Self, LineParseError> {
+        if line.len() == 0 {
+            return Err(LineParseError::EmptyLine);
+        }
+
+        let chars = line.char_indices().collect::<Vec<_>>();
+        let last_valid_chars_index = chars.len().saturating_sub(1);
+
+        // Trim whitespace from the start. If everything gets trimmed we were passed an empty line.
+        let start = next_none_ws(&chars, 0, last_valid_chars_index);
+        if start.is_none() {
+            return Err(LineParseError::EmptyLine);
+        }
+        let start = start.unwrap();
+
+        // Trim whitespace from the end.
+        let end = prev_none_ws(&chars, chars.len() - 1, start);
+        if end.is_none() {
+            panic!("Since start is not None, end can never be None so this should not occur.");
+        }
+        let end = end.unwrap();
+
+        // Store a copy of the entire trimmed line.
+        let mut parsed_line = ParsedLine::default();
+        parsed_line.line = unchecked_slice(line, &chars, start, end);
+
+        // Try to extract the log_date. 
+        // Post: end is on the last fractional seconds digit.
+        let end = extract_log_date(&chars, start, end)?;
+        parsed_line.log_date = unchecked_slice(line, &chars, start, end);
+
+        // Now, in the remainder of the line (if there is any), extract KVPs/prologue items until we reach the message.
+        let start = next_none_ws_or_pipe_after(&chars, end, last_valid_chars_index);
+        if start.is_none() {
+            return Ok(parsed_line);
+        }
+
+        // We could optimize this, but for now it will do. We are unlikely to hit it.
+        let mut end = last_valid_chars_index;
+        let mut start = start.unwrap();
+
+        // Now start to eat KVPs until we find something that is not a KVP.
+        // Record the index of the last one we find, we need that to find the start of the message.
+        let mut end_of_last_kvp = 0;
+        while let Some(kvp) = next_kvp(&chars, start, end) {
+            debug_assert!(kvp.has_key(), "A KVP should always have a key, we can't do anything with it otherwise. KVP = {:?}", kvp);
+            let kvp_strings = kvp.get_kvp_strings(line, &chars);
+            //println!(">>>>> NEXTKVP = {:?}, kvp_strings = {:?}", kvp, kvp_strings);
+
+            if kvp.is_log_level {
+                parsed_line.log_level = kvp_strings.key;
+            } else {
+                parsed_line.kvps.insert(kvp_strings);
+            }
+
+            end_of_last_kvp = kvp.max_index();
+            let potential_start = next_none_ws_or_pipe_after(&chars, end_of_last_kvp, end);
+            if potential_start.is_none() { break; }
+            start = potential_start.unwrap();
+        }
+        
+        let start_of_message_index = next_none_ws_or_pipe_after(&chars, end_of_last_kvp, end);
+        if start_of_message_index.is_none() {
+            // Reached the end of the line without there being a message.
+            return Ok(parsed_line);
+        }
+        let start_of_message_index = start_of_message_index.unwrap();
+        
+        // Now we have located the start of the message we can begin to eat KVPs from the end of the line,
+        // going backwards, until we are no longer hitting KVPs. Note that it is quite likely there will
+        // be several lines separated by \r characters.
+        let limit = start_of_message_index;
+        let mut start_of_this_kvp = end;    // We start looking at the last character on the line.
+
+        while let Some(kvp) = prev_kvp(&chars, end, limit) {
+            debug_assert!(kvp.has_key(), "A KVP should always have a key, we can't do anything with it otherwise. KVP = {:?}", kvp);
+            let kvp_strings = kvp.get_kvp_strings(line, &chars);
+            // println!(">>>>> PREVKVP = {:?}, k = {:?}, v = {:?}", kvp, k, v);
+            parsed_line.kvps.insert(kvp_strings);
+
+            start_of_this_kvp = kvp.min_index();
+            end = prev_none_ws(&chars, start_of_this_kvp - 1, limit).expect("Should be safe to unwrap, there should be a message.");
+        }
+
+        // If there were no KVPs then the end of the message is just the end of the line.
+        // Otherwise, go back to the first non-ws character.
+        let end_of_message_index = if start_of_this_kvp == end {
+            end
+        } else {
+            prev_none_ws(&chars, start_of_this_kvp - 1, limit).expect("Should be safe to unwrap, there should be a message.")
+        };
+        
+        // This 'if' is deals with the badly-formed line case of "2018-09-26 12:34:56.1146655 | pid=12".
+        if !(last_valid_chars_index == start_of_message_index && last_valid_chars_index == end_of_message_index) {
+            // Now we can extract the message, and clean it up so it has no newline characters,
+            // which means it will work in a CSV file without further processing.
+            parsed_line.message = checked_slice(line, &chars, start_of_message_index, end_of_message_index);
+        }
+
+        Ok(parsed_line)
+    }
+}
 
 
 /// Pre: current and limit are valid indexes into chars[].
@@ -235,159 +335,6 @@ fn extract_log_date(chars: &[(usize, char)], mut current: usize, limit: usize) -
         Err(LineParseError::BadLogDate("No fractional seconds part was detected on the log_date".to_string()))
     } else {
         Ok(fraction_end)
-    }
-}
-
-/*
-#[derive(Debug, Default)]
-struct KVP {
-    key_start_index: usize,
-    key_end_index: usize,
-    value_start_index: usize,
-    value_end_index: usize,
-    is_log_level: bool,
-    value_is_quoted: bool
-}
-
-impl KVP {
-    fn has_key(&self) -> bool {
-        self.key_end_index >= self.key_start_index
-    }
-
-    fn has_value(&self) -> bool {
-        self.value_start_index > self.key_end_index && self.value_end_index >= self.value_start_index
-    }
-
-    fn get_kvp_slices<'t>(&self, line: &'t str, chars: &[(usize, char)]) -> (&'t str, Cow<'t, str>) {
-        let k = unchecked_slice(line, &chars, self.key_start_index, self.key_end_index);
-        let v = if self.has_value() {
-            checked_slice(line, &chars, self.value_start_index, self.value_end_index)
-        } else {
-            "".into()
-        };
-
-        (k,v)
-    }
-
-    fn max_index(&self) -> usize {
-        if self.has_value() {
-            if self.value_is_quoted {
-                self.value_end_index + 1
-            } else {
-                self.value_end_index
-            }
-        } else {
-            self.key_end_index + 1
-        }
-    }
-
-    fn min_index(&self) -> usize {
-        self.key_start_index
-    }
-}
-*/
-
-impl<'t, 'k> ParsedLine<'t> {
-    pub fn new(line: &'t str) -> Result<Self, LineParseError> {
-        if line.len() == 0 {
-            return Err(LineParseError::EmptyLine);
-        }
-
-        let chars = line.char_indices().collect::<Vec<_>>();
-        let last_valid_chars_index = chars.len().saturating_sub(1);
-
-        // Trim whitespace from the start. If everything gets trimmed we were passed an empty line.
-        let start = next_none_ws(&chars, 0, last_valid_chars_index);
-        if start.is_none() {
-            return Err(LineParseError::EmptyLine);
-        }
-        let start = start.unwrap();
-
-        // Trim whitespace from the end.
-        let end = prev_none_ws(&chars, chars.len() - 1, start);
-        if end.is_none() {
-            panic!("Since start is not None, end can never be None so this should not occur.");
-        }
-        let end = end.unwrap();
-
-        // Store a copy of the entire trimmed line.
-        let mut parsed_line = ParsedLine::default();
-        parsed_line.line = unchecked_slice(line, &chars, start, end);
-
-        // Try to extract the log_date. 
-        // Post: end is on the last fractional seconds digit.
-        let end = extract_log_date(&chars, start, end)?;
-        parsed_line.log_date = unchecked_slice(line, &chars, start, end);
-
-        // Now, in the remainder of the line (if there is any), extract KVPs/prologue items until we reach the message.
-        let start = next_none_ws_or_pipe_after(&chars, end, last_valid_chars_index);
-        if start.is_none() {
-            return Ok(parsed_line);
-        }
-
-        // We could optimize this, but for now it will do. We are unlikely to hit it.
-        let mut end = last_valid_chars_index;
-        let mut start = start.unwrap();
-
-        // Now start to eat KVPs until we find something that is not a KVP.
-        // Record the index of the last one we find, we need that to find the start of the message.
-        let mut end_of_last_kvp = 0;
-        while let Some(kvp) = next_kvp(&chars, start, end) {
-            debug_assert!(kvp.has_key(), "A KVP should always have a key, we can't do anything with it otherwise. KVP = {:?}", kvp);
-            let (k, v) = kvp.get_kvp_slices(line, &chars);
-            //println!(">>>>> NEXTKVP = {:?}, k = {:?}, v = {:?}", kvp, k, v);
-
-            if kvp.is_log_level {
-                parsed_line.log_level = k;
-            } else {
-                parsed_line.kvps.insert(UniCase::new(k), v);
-            }
-
-            end_of_last_kvp = kvp.max_index();
-            let potential_start = next_none_ws_or_pipe_after(&chars, end_of_last_kvp, end);
-            if potential_start.is_none() { break; }
-            start = potential_start.unwrap();
-        }
-        
-        let start_of_message_index = next_none_ws_or_pipe_after(&chars, end_of_last_kvp, end);
-        if start_of_message_index.is_none() {
-            // Reached the end of the line without there being a message.
-            return Ok(parsed_line);
-        }
-        let start_of_message_index = start_of_message_index.unwrap();
-        
-        // Now we have located the start of the message we can begin to eat KVPs from the end of the line,
-        // going backwards, until we are no longer hitting KVPs. Note that it is quite likely there will
-        // be several lines separated by \r characters.
-        let limit = start_of_message_index;
-        let mut start_of_this_kvp = end;    // We start looking at the last character on the line.
-
-        while let Some(kvp) = prev_kvp(&chars, end, limit) {
-            debug_assert!(kvp.has_key(), "A KVP should always have a key, we can't do anything with it otherwise. KVP = {:?}", kvp);
-            let (k, v) = kvp.get_kvp_slices(line, &chars);
-            // println!(">>>>> PREVKVP = {:?}, k = {:?}, v = {:?}", kvp, k, v);
-            parsed_line.kvps.insert(UniCase::new(k), v);
-
-            start_of_this_kvp = kvp.min_index();
-            end = prev_none_ws(&chars, start_of_this_kvp - 1, limit).expect("Should be safe to unwrap, there should be a message.");
-        }
-
-        // If there were no KVPs then the end of the message is just the end of the line.
-        // Otherwise, go back to the first non-ws character.
-        let end_of_message_index = if start_of_this_kvp == end {
-            end
-        } else {
-            prev_none_ws(&chars, start_of_this_kvp - 1, limit).expect("Should be safe to unwrap, there should be a message.")
-        };
-        
-        // This 'if' is deals with the badly-formed line case of "2018-09-26 12:34:56.1146655 | pid=12".
-        if !(last_valid_chars_index == start_of_message_index && last_valid_chars_index == end_of_message_index) {
-            // Now we can extract the message, and clean it up so it has no newline characters,
-            // which means it will work in a CSV file without further processing.
-            parsed_line.message = checked_slice(line, &chars, start_of_message_index, end_of_message_index);
-        }
-
-        Ok(parsed_line)
     }
 }
 
@@ -680,8 +627,8 @@ mod prologue_tests {
             .expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 2);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("a")], "b");
-        assert_eq!(result.kvps[&UniCase::new("PID")], "123");
+        assert_eq!(result.kvps.value("a"), "b");
+        assert_eq!(result.kvps.value("PID"), "123");
     }
 
     #[test]
@@ -691,11 +638,11 @@ mod prologue_tests {
         let result = ParsedLine::new(line).expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 5);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("a")], "Value with space");
-        assert_eq!(result.kvps[&UniCase::new("PID")], "123");
-        assert_eq!(result.kvps[&UniCase::new("foo")], "Bar");
-        assert_eq!(result.kvps[&UniCase::new("sysref")], "AA123456");
-        assert_eq!(result.kvps[&UniCase::new("empty")], "");
+        assert_eq!(result.kvps.value("a"), "Value with space");
+        assert_eq!(result.kvps.value("PID"), "123");
+        assert_eq!(result.kvps.value("foo"), "Bar");
+        assert_eq!(result.kvps.value("sysref"), "AA123456");
+        assert_eq!(result.kvps.value("empty"), "");
     }
 
     #[test]
@@ -703,8 +650,8 @@ mod prologue_tests {
         let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] |").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 2);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("a")], "b");
-        assert_eq!(result.kvps[&UniCase::new("PID")], "123");
+        assert_eq!(result.kvps.value("a"), "b");
+        assert_eq!(result.kvps.value("PID"), "123");
     }
 
     #[test]
@@ -712,8 +659,8 @@ mod prologue_tests {
         let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 2);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("a")], "b");
-        assert_eq!(result.kvps[&UniCase::new("PID")], "123");
+        assert_eq!(result.kvps.value("a"), "b");
+        assert_eq!(result.kvps.value("PID"), "123");
     }
 }
 
@@ -726,7 +673,7 @@ mod trailing_kvp_tests {
         let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | [INFO_] | Message SysRef=").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 1);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("sysref")], "");
+        assert_eq!(result.kvps.value("sysref"), "");
     }
 
     #[test]
@@ -734,7 +681,7 @@ mod trailing_kvp_tests {
         let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | [INFO_] | Message SysRef=AA123456").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 1);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("sysref")], "AA123456");
+        assert_eq!(result.kvps.value("sysref"), "AA123456");
     }
 
     #[test]
@@ -742,7 +689,7 @@ mod trailing_kvp_tests {
         let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | [INFO_] | Message SysRef=\"It's like AA123456\"").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 1);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("sysref")], "It's like AA123456");
+        assert_eq!(result.kvps.value("sysref"), "It's like AA123456");
     }
 
     #[test]
@@ -750,10 +697,10 @@ mod trailing_kvp_tests {
         let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | [INFO_] | Message Foo=Bar Hit= Http.Request=http:/www.foo.com SysRef=\"It's like AA123456\"").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 4);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("sysref")], "It's like AA123456");
-        assert_eq!(result.kvps[&UniCase::new("foo")], "Bar");
-        assert_eq!(result.kvps[&UniCase::new("hit")], "");
-        assert_eq!(result.kvps[&UniCase::new("Http.Request")], "http:/www.foo.com");
+        assert_eq!(result.kvps.value("sysref"), "It's like AA123456");
+        assert_eq!(result.kvps.value("foo"), "Bar");
+        assert_eq!(result.kvps.value("hit"), "");
+        assert_eq!(result.kvps.value("Http.Request"), "http:/www.foo.com");
     }
 
     #[test]
@@ -761,9 +708,9 @@ mod trailing_kvp_tests {
         let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | [INFO_] | Message Foo=\"Bar\nBar2\nBar3\" Hit= Http.Request=http:/www.foo.com").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 3);
         assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps[&UniCase::new("foo")], "Bar Bar2 Bar3");
-        assert_eq!(result.kvps[&UniCase::new("hit")], "");
-        assert_eq!(result.kvps[&UniCase::new("Http.Request")], "http:/www.foo.com");
+        assert_eq!(result.kvps.value("foo"), "Bar Bar2 Bar3");
+        assert_eq!(result.kvps.value("hit"), "");
+        assert_eq!(result.kvps.value("Http.Request"), "http:/www.foo.com");
     }
 }
 
@@ -812,14 +759,14 @@ mod real_log_line_tests {
         assert_eq!(result.message, "Running aggregate capacity generator.");
 
         assert_eq!(result.kvps.len(), 8);
-        assert_eq!(result.kvps[&UniCase::new("MachineName")], "Some.machine.net");
-        assert_eq!(result.kvps[&UniCase::new("AppName")], "Some.Service-Z63JHGJKK23");
-        assert_eq!(result.kvps[&UniCase::new("pid")], "4964");
-        assert_eq!(result.kvps[&UniCase::new("tid")], "22");
-        assert_eq!(result.kvps[&UniCase::new("Source")], "AggregateCapacityGenerator");
-        assert_eq!(result.kvps[&UniCase::new("Action")], "Run");
-        assert_eq!(result.kvps[&UniCase::new("SourceInfo")], "Something.Something.DarkSide.Aggregation.AggregateCapacityGenerator, Something.Something.DarkSide v1.0.0");
-        assert_eq!(result.kvps[&UniCase::new("SourceInstance")], "38449385");
+        assert_eq!(result.kvps.value("MachineName"), "Some.machine.net");
+        assert_eq!(result.kvps.value("AppName"), "Some.Service-Z63JHGJKK23");
+        assert_eq!(result.kvps.value("pid"), "4964");
+        assert_eq!(result.kvps.value("tid"), "22");
+        assert_eq!(result.kvps.value("Source"), "AggregateCapacityGenerator");
+        assert_eq!(result.kvps.value("Action"), "Run");
+        assert_eq!(result.kvps.value("SourceInfo"), "Something.Something.DarkSide.Aggregation.AggregateCapacityGenerator, Something.Something.DarkSide v1.0.0");
+        assert_eq!(result.kvps.value("SourceInstance"), "38449385");
     }
 
     #[test]
@@ -844,17 +791,17 @@ mod real_log_line_tests {
         assert_eq!(result.message, message);
 
         assert_eq!(result.kvps.len(), 11);
-        assert_eq!(result.kvps[&UniCase::new("MachineName")], "Some.machine.net");
-        assert_eq!(result.kvps[&UniCase::new("AppName")], "Some.Service-Z63JHGJKK23");
-        assert_eq!(result.kvps[&UniCase::new("pid")], "4964");
-        assert_eq!(result.kvps[&UniCase::new("tid")], "144");
-        assert_eq!(result.kvps[&UniCase::new("Source")], "SurveyorCapacityService");
-        assert_eq!(result.kvps[&UniCase::new("Action")], "GetSurveyorAvailabilityFor");
-        assert_eq!(result.kvps[&UniCase::new("SourceInfo")], "What.Ever.Another.Service.SurveyorCapacityService, Blah.Blah.Blah.Services v1.11.18213.509");
-        assert_eq!(result.kvps[&UniCase::new("SourceInstance")], "855390");
-        assert_eq!(result.kvps[&UniCase::new("startDate")], "28/09/2018");
-        assert_eq!(result.kvps[&UniCase::new("endDate")], "11/10/2018");
-        assert_eq!(result.kvps[&UniCase::new("postcode")], "MK16 8QF");
+        assert_eq!(result.kvps.value("MachineName"), "Some.machine.net");
+        assert_eq!(result.kvps.value("AppName"), "Some.Service-Z63JHGJKK23");
+        assert_eq!(result.kvps.value("pid"), "4964");
+        assert_eq!(result.kvps.value("tid"), "144");
+        assert_eq!(result.kvps.value("Source"), "SurveyorCapacityService");
+        assert_eq!(result.kvps.value("Action"), "GetSurveyorAvailabilityFor");
+        assert_eq!(result.kvps.value("SourceInfo"), "What.Ever.Another.Service.SurveyorCapacityService, Blah.Blah.Blah.Services v1.11.18213.509");
+        assert_eq!(result.kvps.value("SourceInstance"), "855390");
+        assert_eq!(result.kvps.value("startDate"), "28/09/2018");
+        assert_eq!(result.kvps.value("endDate"), "11/10/2018");
+        assert_eq!(result.kvps.value("postcode"), "MK16 8QF");
     }
 
     #[test]
@@ -891,15 +838,15 @@ mod real_log_line_tests {
         assert_eq!(result.message, &message[1..]);  // This message has an extra leading space, we need to trim it for the test.
 
         assert_eq!(result.kvps.len(), 9);
-        assert_eq!(result.kvps[&UniCase::new("pid")], "6384");
-        assert_eq!(result.kvps[&UniCase::new("tid")], "57");
-        assert_eq!(result.kvps[&UniCase::new("Source")], "OurController");
-        assert_eq!(result.kvps[&UniCase::new("Action")], "SomeSpecialAction");
-        assert_eq!(result.kvps[&UniCase::new("SourceInfo")], "Blah.Blah.Blah.IISHost.Api.OurController, Blah.Blah.Blah.IISHost v1.12.18323.4");
-        assert_eq!(result.kvps[&UniCase::new("SourceInstance")], "35519589");
-        assert_eq!(result.kvps[&UniCase::new("startDate")], "28/11/2018");
-        assert_eq!(result.kvps[&UniCase::new("endDate")], "04/12/2018");
-        assert_eq!(result.kvps[&UniCase::new("sysref")], "QU090700");
+        assert_eq!(result.kvps.value("pid"), "6384");
+        assert_eq!(result.kvps.value("tid"), "57");
+        assert_eq!(result.kvps.value("Source"), "OurController");
+        assert_eq!(result.kvps.value("Action"), "SomeSpecialAction");
+        assert_eq!(result.kvps.value("SourceInfo"), "Blah.Blah.Blah.IISHost.Api.OurController, Blah.Blah.Blah.IISHost v1.12.18323.4");
+        assert_eq!(result.kvps.value("SourceInstance"), "35519589");
+        assert_eq!(result.kvps.value("startDate"), "28/11/2018");
+        assert_eq!(result.kvps.value("endDate"), "04/12/2018");
+        assert_eq!(result.kvps.value("sysref"), "QU090700");
     }
 
     #[test]
@@ -920,14 +867,14 @@ mod real_log_line_tests {
         assert_eq!(result.message, "Some irrelevant message");
 
         assert_eq!(result.kvps.len(), 9);
-        assert_eq!(result.kvps[&UniCase::new("pid")], "6384");
-        assert_eq!(result.kvps[&UniCase::new("tid")], "57");
-        assert_eq!(result.kvps[&UniCase::new("Source")], "SecretService");
-        assert_eq!(result.kvps[&UniCase::new("Action")], "GetSurveyorScheduleSummary");
-        assert_eq!(result.kvps[&UniCase::new("SourceInfo")], "Blah.Blah.Blah.Services.SurveyorSchedules.SecretService, Blah.Blah.Blah.Services v1.12.18323.4");
-        assert_eq!(result.kvps[&UniCase::new("SourceInstance")], "17453777");
-        assert_eq!(result.kvps[&UniCase::new("criteria")], "{_IncludeInactiveSurveyors_:true,_StartDate_:{_year_:2018,_month_:11,_day_:27},_NumberOfDays_:7,_Skip_:0,_Take_:10,_Filter_:[{_FieldName_:0,_Value_:_1_}],_SortField_:0,_Descending_:false}");
-        assert_eq!(result.kvps[&UniCase::new("summary")], "  Total surveyors: 577  Total surveyors matching criteria: 577");
+        assert_eq!(result.kvps.value("pid"), "6384");
+        assert_eq!(result.kvps.value("tid"), "57");
+        assert_eq!(result.kvps.value("Source"), "SecretService");
+        assert_eq!(result.kvps.value("Action"), "GetSurveyorScheduleSummary");
+        assert_eq!(result.kvps.value("SourceInfo"), "Blah.Blah.Blah.Services.SurveyorSchedules.SecretService, Blah.Blah.Blah.Services v1.12.18323.4");
+        assert_eq!(result.kvps.value("SourceInstance"), "17453777");
+        assert_eq!(result.kvps.value("criteria"), "{_IncludeInactiveSurveyors_:true,_StartDate_:{_year_:2018,_month_:11,_day_:27},_NumberOfDays_:7,_Skip_:0,_Take_:10,_Filter_:[{_FieldName_:0,_Value_:_1_}],_SortField_:0,_Descending_:false}");
+        assert_eq!(result.kvps.value("summary"), "  Total surveyors: 577  Total surveyors matching criteria: 577");
     }
 
     #[test]
@@ -943,15 +890,15 @@ mod real_log_line_tests {
         assert_eq!(result.message, "Attempting to load assembly C:\\Users\\pdaniels\\AppData\\Local\\Temp\\Whatever-201802-03-1434124214.3324\\Something.Database.dll");
 
         assert_eq!(result.kvps.len(), 9);
-        assert_eq!(result.kvps[&UniCase::new("MachineName")], "RD12345.corp.net");
-        assert_eq!(result.kvps[&UniCase::new("AppName")], "Another.Host");
-        assert_eq!(result.kvps[&UniCase::new("pid")], "8508");
-        assert_eq!(result.kvps[&UniCase::new("tid")], "1");
-        assert_eq!(result.kvps[&UniCase::new("Source")], "ContainerBuilder");
-        assert_eq!(result.kvps[&UniCase::new("Action")], "GetOrLoadAssembly");
-        assert_eq!(result.kvps[&UniCase::new("SourceInfo")], "Some.UnityThing.ContainerBuilder, Some.UnityThing v1.12.18333.11642");
-        assert_eq!(result.kvps[&UniCase::new("SourceInstance")], "61115925");
-        assert_eq!(result.kvps[&UniCase::new("AssemblyFile")], "C:\\Users\\pdaniels\\AppData\\Local\\Temp\\Whatever-201802-03-1434124214.3324\\Something.Database.dll");
+        assert_eq!(result.kvps.value("MachineName"), "RD12345.corp.net");
+        assert_eq!(result.kvps.value("AppName"), "Another.Host");
+        assert_eq!(result.kvps.value("pid"), "8508");
+        assert_eq!(result.kvps.value("tid"), "1");
+        assert_eq!(result.kvps.value("Source"), "ContainerBuilder");
+        assert_eq!(result.kvps.value("Action"), "GetOrLoadAssembly");
+        assert_eq!(result.kvps.value("SourceInfo"), "Some.UnityThing.ContainerBuilder, Some.UnityThing v1.12.18333.11642");
+        assert_eq!(result.kvps.value("SourceInstance"), "61115925");
+        assert_eq!(result.kvps.value("AssemblyFile"), "C:\\Users\\pdaniels\\AppData\\Local\\Temp\\Whatever-201802-03-1434124214.3324\\Something.Database.dll");
     }
 
      #[test]
@@ -980,24 +927,24 @@ mod real_log_line_tests {
         assert_eq!(result.message, "Successfully retrived 20 number of audit items for target id PD123456 and targetType Case");
 
         assert_eq!(result.kvps.len(), 18);
-        assert_eq!(result.kvps[&UniCase::new("pid")], "7900");
-        assert_eq!(result.kvps[&UniCase::new("tid")], "18");
-        assert_eq!(result.kvps[&UniCase::new("Source")], "TheClient");
-        assert_eq!(result.kvps[&UniCase::new("Action")], "TheAuditAction");
-        assert_eq!(result.kvps[&UniCase::new("CorrelationKey")], "0f5feb1d-996e-499d-9a52-7741b543c21d");
-        assert_eq!(result.kvps[&UniCase::new("Tenant")], "Somebody");
-        assert_eq!(result.kvps[&UniCase::new("UserId")], "SomeUserId");
-        assert_eq!(result.kvps[&UniCase::new("UserName")], "Philip+Daniels");
-        assert_eq!(result.kvps[&UniCase::new("UserIdentity")], "SomeUserIdentity");
-        assert_eq!(result.kvps[&UniCase::new("UserEmail")], "philip.daniels%40ex.com");
-        assert_eq!(result.kvps[&UniCase::new("Owin.Request.Id")], "5a7223cb-06ef-4620-92a8-57eeb7c04b7c");
-        assert_eq!(result.kvps[&UniCase::new("Owin.Request.Path")], "/api/tosomewhere/PD123456/20");
-        assert_eq!(result.kvps[&UniCase::new("Owin.Request.QueryString")], "");
-        assert_eq!(result.kvps[&UniCase::new("SourceInfo")], "Something.Auditor.ReadClient.TheClient, Something.Auditor.ReadClient v1.10.18155.4");
-        assert_eq!(result.kvps[&UniCase::new("SourceInstance")], "56183685");
-        assert_eq!(result.kvps[&UniCase::new("pageSize")], "20");
-        assert_eq!(result.kvps[&UniCase::new("targetId")], "PD123456");
-        assert_eq!(result.kvps[&UniCase::new("targetType")], "Case");
+        assert_eq!(result.kvps.value("pid"), "7900");
+        assert_eq!(result.kvps.value("tid"), "18");
+        assert_eq!(result.kvps.value("Source"), "TheClient");
+        assert_eq!(result.kvps.value("Action"), "TheAuditAction");
+        assert_eq!(result.kvps.value("CorrelationKey"), "0f5feb1d-996e-499d-9a52-7741b543c21d");
+        assert_eq!(result.kvps.value("Tenant"), "Somebody");
+        assert_eq!(result.kvps.value("UserId"), "SomeUserId");
+        assert_eq!(result.kvps.value("UserName"), "Philip+Daniels");
+        assert_eq!(result.kvps.value("UserIdentity"), "SomeUserIdentity");
+        assert_eq!(result.kvps.value("UserEmail"), "philip.daniels%40ex.com");
+        assert_eq!(result.kvps.value("Owin.Request.Id"), "5a7223cb-06ef-4620-92a8-57eeb7c04b7c");
+        assert_eq!(result.kvps.value("Owin.Request.Path"), "/api/tosomewhere/PD123456/20");
+        assert_eq!(result.kvps.value("Owin.Request.QueryString"), "");
+        assert_eq!(result.kvps.value("SourceInfo"), "Something.Auditor.ReadClient.TheClient, Something.Auditor.ReadClient v1.10.18155.4");
+        assert_eq!(result.kvps.value("SourceInstance"), "56183685");
+        assert_eq!(result.kvps.value("pageSize"), "20");
+        assert_eq!(result.kvps.value("targetId"), "PD123456");
+        assert_eq!(result.kvps.value("targetType"), "Case");
     }
  
     #[test]
@@ -1032,14 +979,14 @@ mod real_log_line_tests {
         assert_eq!(result.message, message);
 
         assert_eq!(result.kvps.len(), 9);
-        assert_eq!(result.kvps[&UniCase::new("pid")], "7900");
-        assert_eq!(result.kvps[&UniCase::new("tid")], "21");
-        assert_eq!(result.kvps[&UniCase::new("Source")], "NotificationTemplater");
-        assert_eq!(result.kvps[&UniCase::new("Action")], "GenerateNotificationMessage");
-        assert_eq!(result.kvps[&UniCase::new("CorrelationKey")], "122a47ac-2af1-4afa-b4f1-b0bf297450f3");
-        assert_eq!(result.kvps[&UniCase::new("SourceInfo")], "Our.Templater.NotificationTemplater, Our.Templater.Notifications v0.5.18129.24");
-        assert_eq!(result.kvps[&UniCase::new("SourceInstance")], "52920148");
-        assert_eq!(result.kvps[&UniCase::new("template")], "Invoice Authorisation Code => {InvoiceAuthorisationCode} Invoice Customer Payment Type => {InvoiceCustomerPaymentType}  some words ");
-        assert_eq!(result.kvps[&UniCase::new("SysRef")], "QU076868");
+        assert_eq!(result.kvps.value("pid"), "7900");
+        assert_eq!(result.kvps.value("tid"), "21");
+        assert_eq!(result.kvps.value("Source"), "NotificationTemplater");
+        assert_eq!(result.kvps.value("Action"), "GenerateNotificationMessage");
+        assert_eq!(result.kvps.value("CorrelationKey"), "122a47ac-2af1-4afa-b4f1-b0bf297450f3");
+        assert_eq!(result.kvps.value("SourceInfo"), "Our.Templater.NotificationTemplater, Our.Templater.Notifications v0.5.18129.24");
+        assert_eq!(result.kvps.value("SourceInstance"), "52920148");
+        assert_eq!(result.kvps.value("template"), "Invoice Authorisation Code => {InvoiceAuthorisationCode} Invoice Customer Payment Type => {InvoiceCustomerPaymentType}  some words ");
+        assert_eq!(result.kvps.value("SysRef"), "QU076868");
     }
 }

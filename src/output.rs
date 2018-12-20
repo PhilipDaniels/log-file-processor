@@ -1,23 +1,21 @@
 /// This module is responsible for preparing an output record from a ParsedLine.
 
-use unicase::UniCase;
-
 use crate::config::{self, Config};
 use crate::inputs::Column;
 use crate::parsed_line::ParsedLine;
+use crate::parse_utils;
 
 pub fn make_output_record<'p>(parsed_line: &'p ParsedLine, columns: &'p [Column]) -> Vec<&'p str> {
     let mut data = Vec::new();
     
     for column in columns {
         match column.name.as_str() {
-            config::LOG_DATE => data.push(parsed_line.log_date),
-            config::LOG_LEVEL => data.push(parsed_line.log_level),
-            config::MESSAGE => data.push(&parsed_line.message),
+            parse_utils::LOG_DATE => data.push(parsed_line.log_date),
+            parse_utils::LOG_LEVEL => data.push(parsed_line.log_level),
+            parse_utils::MESSAGE => data.push(&parsed_line.message),
 
             _ => {
-                let ci_comparer = UniCase::new(column.name.as_str());
-                match parsed_line.kvps.get(&ci_comparer) {
+                match parsed_line.kvps.get_value(&column.name) {
                     Some(val) => data.push(val),
                     None => data.push(""),
                 }

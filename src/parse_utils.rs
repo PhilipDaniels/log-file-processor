@@ -1,5 +1,7 @@
 /// This module contains low-level parsing functions that typically operate by
 /// moving forwards and backwards over the line one character at a time.
+/// One of the key differences between these functions and the built-in equivalents
+/// is that these functions take a 'limit' parameter.
 
 use std::borrow::Cow;
 
@@ -18,6 +20,17 @@ pub const LOG_LEVELS: [&'static str; 9] =
     "[DEBG2]",
     "[DEBG1]",
 ];
+
+
+/// The name of the built-in LogDate column.
+pub const LOG_DATE: &str = "LogDate";
+
+/// The name of the built-in LogLevel column.
+pub const LOG_LEVEL: &str = "LogLevel";
+
+/// The name of the built-in Message column.
+pub const MESSAGE: &str = "Message";
+
 
 /// A custom function corresponding to our definition of whitespace.
 pub fn char_is_whitespace(c: char) -> bool {

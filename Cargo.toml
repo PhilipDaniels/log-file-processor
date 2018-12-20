@@ -10,10 +10,8 @@ glob = "0.2"
 indicatif = "0.10.2"
 rayon = "1.0.3"
 regex = "1"
-unicase = "2.2.0"
 
 #needle = { git = "https://github.com/archer884/needle" }
-#elapsed = "0.1"
 #input-file-generator = { path = "input-file-generator" }
 
 # Optimize the release mode builds as much as we can.
