@@ -48,7 +48,8 @@ impl InputFile {
     }
 }
 
-/// Represents one column to be extracted. This consists of a name and a regex that will extract that column.
+/// Represents one column to be extracted. This consists of a name and a regex that will be
+/// used to extract that column if it cannot be found as a standard KVP.
 #[derive(Clone, Debug)]
 pub struct Column {
     pub name: String,

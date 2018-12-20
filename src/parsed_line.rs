@@ -58,6 +58,7 @@ pub enum LineParseError {
 
 #[derive(Debug, Default)]
 pub struct ParsedLine<'t> {
+    /// The entire original line with whitespace trimmed from the ends.
     pub line: &'t str,
     pub log_date: &'t str,
     pub log_level: &'t str,
