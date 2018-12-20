@@ -49,6 +49,11 @@ Some message formats
     messageFormat="{timestamp} | AppName={appName} | pid={processId} | tid={threadId} | {level} | {message}"  (Case Service)
 */
 
+
+
+
+
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum LineParseError {
     EmptyLine,
@@ -57,14 +62,15 @@ pub enum LineParseError {
     UnexpectedEndOfInput
 }
 
-    #[derive(Debug, Default, PartialEq, Eq)]
-    pub struct ParsedLine<'t> {
-        pub line: &'t str,
-        pub log_date: &'t str,
-        pub log_level: &'t str,
-        pub message: Cow<'t, str>,
-        pub kvps: HashMap<UniCase<&'t str>, Cow<'t, str>>
-    }
+#[derive(Debug, Default)]
+pub struct ParsedLine<'t> {
+    pub line: &'t str,
+    pub log_date: &'t str,
+    pub log_level: &'t str,
+    pub message: Cow<'t, str>,
+    pub kvps: HashMap<UniCase<&'t str>, Cow<'t, str>>,
+//    pub kvps2: KVPCollection<'t>
+}
 
 /// The set of possible log level emitted by the Fundamentals logging framework.
 /// They are ordered by frequency of occurence, as this should give a (very small!)
@@ -513,6 +519,30 @@ fn next_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option<KVP
         value_is_quoted,
         .. KVP::default() })
 }
+
+/*
+fn next_kvp2<'t>(line: &'t str, chars: &'t [(usize, char)], current: usize, limit: usize) -> Option<KVPSlices<'t>> {
+    match next_kvp(chars, current, limit) {
+        Some(kvp) => {
+            let (key, value) = kvp.get_kvp_slices(line, &chars);
+            Some(KVPSlices { key, value })
+        },
+
+        None => None
+    }
+}
+
+fn prev_kvp2<'t>(line: &'t str, chars: &'t [(usize, char)], current: usize, limit: usize) -> Option<KVPSlices<'t>> {
+    match prev_kvp(chars, current, limit) {
+        Some(kvp) => {
+            let (key, value) = kvp.get_kvp_slices(line, &chars);
+            Some(KVPSlices { key, value })
+        },
+
+        None => None
+    }
+}
+*/
 
 /// Attempts to extract a Key-Value pair starting at current and reading backwards. There are
 /// several possible forms of a KVP:

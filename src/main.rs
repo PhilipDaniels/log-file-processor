@@ -10,6 +10,7 @@ use regex::{Captures};
 mod fast_logfile_iterator;
 mod config;
 mod inputs;
+mod kvps;
 mod output;
 mod parsed_line;
 mod regexes;
