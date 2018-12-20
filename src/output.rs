@@ -1,13 +1,12 @@
 /// This module is responsible for preparing an output record from a ParsedLine.
+
 use unicase::UniCase;
-use std::borrow::Cow;
 
 use crate::config::{self, Config};
 use crate::inputs::Column;
 use crate::parsed_line::ParsedLine;
 
-/*
-pub fn make_output_record<'p, 't, 'c>(parsed_line: &'p ParsedLine<'t>, columns: &'c [Column]) -> Vec<&'t str> {
+pub fn make_output_record<'p>(parsed_line: &'p ParsedLine, columns: &'p [Column]) -> Vec<&'p str> {
     let mut data = Vec::new();
     
     for column in columns {
@@ -19,12 +18,7 @@ pub fn make_output_record<'p, 't, 'c>(parsed_line: &'p ParsedLine<'t>, columns: 
             _ => {
                 let ci_comparer = UniCase::new(column.name.as_str());
                 match parsed_line.kvps.get(&ci_comparer) {
-                    // This is the problem here. To make it explicit:
-                    //     val is a "&'t Cow<'t, str>" and x is "&'t str"
-                    Some(val) => {
-                        let x = val.as_ref();
-                        data.push(x);
-                    },
+                    Some(val) => data.push(val),
                     None => data.push(""),
                 }
             },
@@ -33,11 +27,6 @@ pub fn make_output_record<'p, 't, 'c>(parsed_line: &'p ParsedLine<'t>, columns: 
 
     data
 }
-*/
-
-
-    
-//return Vec::new();
 
 
 /* OLD CODE.

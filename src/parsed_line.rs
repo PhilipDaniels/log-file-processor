@@ -57,14 +57,14 @@ pub enum LineParseError {
     UnexpectedEndOfInput
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct ParsedLine<'t> {
-    pub line: &'t str,
-    pub log_date: &'t str,
-    pub log_level: &'t str,
-    pub message: Cow<'t, str>,
-    pub kvps: HashMap<UniCase<&'t str>, Cow<'t, str>>
-}
+    #[derive(Debug, Default, PartialEq, Eq)]
+    pub struct ParsedLine<'t> {
+        pub line: &'t str,
+        pub log_date: &'t str,
+        pub log_level: &'t str,
+        pub message: Cow<'t, str>,
+        pub kvps: HashMap<UniCase<&'t str>, Cow<'t, str>>
+    }
 
 /// The set of possible log level emitted by the Fundamentals logging framework.
 /// They are ordered by frequency of occurence, as this should give a (very small!)
@@ -603,7 +603,7 @@ fn prev_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option<KVP
     }
 }
 
-impl<'t> ParsedLine<'t> {
+impl<'t, 'k> ParsedLine<'t> {
     pub fn new(line: &'t str) -> Result<Self, LineParseError> {
         if line.len() == 0 {
             return Err(LineParseError::EmptyLine);

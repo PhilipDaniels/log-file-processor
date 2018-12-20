@@ -6,7 +6,6 @@ use std::env;
 use csv::{Writer, WriterBuilder};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, HumanBytes, HumanDuration};
 use regex::{Captures};
-use unicase::UniCase;
 
 mod fast_logfile_iterator;
 mod config;
@@ -146,60 +145,12 @@ fn process_line(columns: &[Column], line: String,  writer: &mut Writer<File>) {
     }
 
     let parsed_line = parsed_line.unwrap();
-    // let data = output::make_output_record(&parsed_line, columns);
-    
-    // The below code works. But if I try to pull it out into a separate function
-    // Rust will not compile it.
-    let mut data = Vec::new();
-    
-    for column in columns {
-        match column.name.as_str() {
-            config::LOG_DATE => data.push(parsed_line.log_date),
-            config::LOG_LEVEL => data.push(parsed_line.log_level),
-            config::MESSAGE => data.push(&parsed_line.message),
-
-            _ => {
-                let ci_comparer = UniCase::new(column.name.as_str());
-                match parsed_line.kvps.get(&ci_comparer) {
-                    Some(val) => {
-                        let x = val.as_ref();
-                        data.push(x);
-                    },
-                    None => data.push(""),
-                }
-            },
-        }
-    }
+    let data = output::make_output_record(&parsed_line, columns);
 
     writer.write_record(&data).expect("Writing a CSV record should always succeed.");
 }
 
-pub fn make_output_record<'p, 't, 'c>(parsed_line: &'p ParsedLine<'t>, columns: &'c [Column]) -> Vec<&'t str> {
-    let mut data = Vec::new();
-    
-    for column in columns {
-        match column.name.as_str() {
-            config::LOG_DATE => data.push(parsed_line.log_date),
-            config::LOG_LEVEL => data.push(parsed_line.log_level),
-            config::MESSAGE => data.push(&parsed_line.message),
 
-            _ => {
-                let ci_comparer = UniCase::new(column.name.as_str());
-                match parsed_line.kvps.get(&ci_comparer) {
-                    // This is the problem here. To make it explicit:
-                    //     val is a "&'t Cow<'t, str>" and x is "&'t str"
-                    Some(val) => {
-                        let x = val.as_ref();
-                        data.push(x);
-                    },
-                    None => data.push(""),
-                }
-            },
-        }
-    }
-
-    data
-}
 
 
 fn extract_date(captures: Captures, capture_names: &[Option<&str>]) -> String {
