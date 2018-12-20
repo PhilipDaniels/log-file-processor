@@ -12,6 +12,7 @@ mod config;
 mod inputs;
 mod kvps;
 mod output;
+mod parse_utils;
 mod parsed_line;
 mod regexes;
 use crate::config::{Config};

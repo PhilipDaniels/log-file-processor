@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::borrow::Cow;
 use unicase::UniCase;
-
+use crate::parse_utils::*;
+use crate::kvps::{next_kvp, prev_kvp};
 /*
 Notes
 =====
@@ -50,16 +51,11 @@ Some message formats
 */
 
 
-
-
-
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum LineParseError {
     EmptyLine,
     IncompleteLine(String),
-    BadLogDate(String),
-    UnexpectedEndOfInput
+    BadLogDate(String)
 }
 
 #[derive(Debug, Default)]
@@ -72,116 +68,7 @@ pub struct ParsedLine<'t> {
 //    pub kvps2: KVPCollection<'t>
 }
 
-/// The set of possible log level emitted by the Fundamentals logging framework.
-/// They are ordered by frequency of occurence, as this should give a (very small!)
-/// performance boost when checking for them.
-const LOG_LEVELS: [&'static str; 9] = 
-[
-    "[INFO_]",
-    "[DEBUG]",
-    "[VRBSE]",
-    "[WARNG]",
-    "[ERROR]",
-    "[FATAL]",
-    "[UNDEF]",
-    "[DEBG2]",
-    "[DEBG1]",
-];
 
-/// A custom function corresponding to our definition of whitespace.
-fn char_is_whitespace(c: char) -> bool {
-    c == ' ' || c == '\r' || c == '\n' || c == '\t'
-}
-
-/// A function to be used when parsing KVPs.
-fn char_is_kvp_terminator(c: char) -> bool {
-    c == '=' || char_is_whitespace(c)
-}
-
-// While PRED(c) is true, the index is advanced.
-// So in effect, p is a function that says 'if c matches this, keep going'
-fn next<PRED>(chars: &[(usize, char)], mut current: usize, limit: usize, pred: PRED) -> Option<usize>
-    where PRED: Fn(char) -> bool
-{
-    debug_assert!(current < chars.len(), "current = {}, chars.len() = {}", current, chars.len());
-    debug_assert!(limit < chars.len(), "limit = {}, chars.len() = {}", limit, chars.len());
-    debug_assert!(current <= limit, "current = {}, limit = {}", current, limit);
-
-    while current < limit && pred(chars[current].1) {
-        current += 1;
-    }
-
-    if pred(chars[current].1) { None } else { Some(current) }
-}
-
-// While PRED(c) is true, the index is shrunk.
-// So in effect, p is a function that says 'if c matches this, keep going'
-fn prev<PRED>(chars: &[(usize, char)], mut current: usize, limit: usize, pred: PRED) -> Option<usize>
-    where PRED: Fn(char) -> bool
-{
-    debug_assert!(current < chars.len(), "current = {}, chars.len() = {}", current, chars.len());
-    debug_assert!(limit < chars.len(), "limit = {}, chars.len() = {}", limit, chars.len());
-    debug_assert!(current >= limit, "current = {}, limit = {}", current, limit);
-
-    while current > limit && pred(chars[current].1) {
-        current -= 1;
-    }
-
-    if pred(chars[current].1) { None } else { Some(current) }
-}
-
-/// Pre: current and limit are valid indexes into chars[].
-/// Returns: None if a ws character cannot be found within the limited range,
-/// otherwise Ok(n) where n will be on the first whitespace character.
-fn next_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
-    next(chars, current, limit, |c| !char_is_whitespace(c))
-}
-
-/// Pre: current and limit are valid indexes into chars[].
-/// Returns: None if a non-ws character cannot be found within the limited range,
-/// otherwise Ok(n) where n will be on the first non-whitespace character.
-fn next_none_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
-    next(chars, current, limit, char_is_whitespace)
-}
-
-/// Like `next_none_ws`, but also skips pipe characters ('|'). Used when extracting the prologue.
-fn next_none_ws_or_pipe(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
-    next(chars, current, limit, |c| char_is_whitespace(c) || c == '|')
-}
-
-/// Pre: chars[current] has already been dealt with (e.g. it may be the inclusive end of a word).
-/// Like `next_none_ws_or_pipe`, but always tries to move on to the next character.
-fn next_none_ws_or_pipe_after(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
-    let potential_next = inc(chars, current);
-    if potential_next.is_err() {
-        return None;
-    }
-
-    next_none_ws_or_pipe(chars, potential_next.unwrap(), limit)
-}
-
-/// Pre: current and limit are valid indexes into chars[].
-/// Returns: None if a non-ws character cannot be found within the limited range,
-/// otherwise Ok(n) where n will be on the last non-whitespace character.
-fn prev_none_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
-    prev(chars, current, limit, char_is_whitespace)
-}
-
-/// Pre: current and limit are valid indexes into chars[].
-/// Returns: None if a ws character cannot be found within the limited range,
-/// otherwise Ok(n) where n will be on the first whitespace character.
-fn prev_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
-    prev(chars, current, limit, |c| !char_is_whitespace(c))
-}
-
-/// Because we are using inclusive ranges, we need to add 1 to the difference
-/// in order to calculate the number of characters still available. e.g.
-/// For "2018" with current of 0 and limit of 3 (the '8'), there are 3 + 1 - 0
-/// characters available.
-/// Returns: the number of characters available within the window.
-fn num_chars_available(current: usize, limit: usize) -> usize {
-    (limit + 1) - current
-}
 
 /// Pre: current and limit are valid indexes into chars[].
 /// For " 2018-09-26 12:34:56.1146657 ...", current will be '2' and limit on the last character.
@@ -351,40 +238,7 @@ fn extract_log_date(chars: &[(usize, char)], mut current: usize, limit: usize) -
     }
 }
 
-/// Increment index.
-/// Returns. An error if the increment makes index exceed the last valid index of chars,
-/// otherwise the new index.
-fn inc(chars: &[(usize, char)], mut index: usize) -> Result<usize, LineParseError> {
-    index += 1;
-    if index >= chars.len() {
-        Err(LineParseError::UnexpectedEndOfInput)
-    } else {
-        Ok(index)
-    }
-}
-
-/// A convenience function for slicing into the original line, which ensures that we do
-/// it correctly - start and end are indices into the chars[] array, NOT the line.
-/// We get the actual bounds from the .0 element of the chars tuples.
-/// 'unchecked' means that no checking is done for embedded new lines.
-fn unchecked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, end: usize) -> &'t str {
-    &line[chars[start].0 ..= chars[end].0]
-}
-
-/// A convenience function for slicing into the original line, which ensures that we do
-/// it correctly - start and end are indices into the chars[] array, NOT the line.
-/// We get the actual bounds from the .0 element of the chars tuples.
-/// 'checked' means that any embedded \r or \n characters will be replaced with spaces.
-fn checked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, end: usize) -> Cow<'t, str> {
-    let slice = unchecked_slice(line, chars, start, end);
-    if slice.contains(|c| c == '\r' || c == '\n') {
-        let safe_string = slice.replace(|c| c == '\r' || c == '\n', " ");
-        Cow::Owned(safe_string)
-    } else {
-        Cow::Borrowed(slice)
-    }
-}
-
+/*
 #[derive(Debug, Default)]
 struct KVP {
     key_start_index: usize,
@@ -431,207 +285,7 @@ impl KVP {
         self.key_start_index
     }
 }
-
-/// Attempts to extract a Key-Value pair starting at current and reading forward. There are
-/// several possible forms of a KVP:
-/// 
-///     Key=
-///     Key=Value
-///     Key="Value with space"
-/// 
-/// These forms are guaranteed by the logging framework. In particular, there is guaranteed
-/// to be no space around the '=', and the value will be wrapped in double quotes if it has
-/// a quote or a space in it. 'Key' may contain '.', as in "HttpRequest.QueryString".
-/// 
-/// Pre: current is already on the start character ('K' in the above example) and limit
-/// is at least at the end of the KVP expression.
-fn next_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option<KVP> {
-    debug_assert!(current < chars.len(), "current = {}, chars.len() = {}", current, chars.len());
-    debug_assert!(limit < chars.len(), "limit = {}, chars.len() = {}", limit, chars.len());
-    debug_assert!(current <= limit, "current = {}, limit = {}", current, limit);
-
-    let key_start_index = current;
-    let index_of_kvp_terminator = next(chars, key_start_index, limit, |c| !char_is_kvp_terminator(c));
-
-    // Did we actually hit a non-equals first? In which case we do not have a KVP.
-    // This may be the log-level in the prologue. Add some code to check the slice
-    // is one of the log-levels and if so return it as the key.
-    // The unwrap_or is when the message ends with the log level such as "...[INFO]".
-    let index_of_kvp_terminator = index_of_kvp_terminator.unwrap_or(limit);
-    if chars[index_of_kvp_terminator].1 != '=' {
-        let possible_log_level: String = chars[current..].iter().map(|(_, c)| c).take(7).collect();
-        if LOG_LEVELS.contains(&possible_log_level.as_str()) {
-            // println!(">>>>> Returning Log Level {:?}", possible_log_level);
-            let key_end_index = if index_of_kvp_terminator == limit { index_of_kvp_terminator } else { index_of_kvp_terminator - 1 };
-            return Some(KVP {
-                key_start_index: key_start_index,
-                key_end_index: key_end_index,
-                is_log_level: true,
-                .. KVP::default() })
-        };
-
-        return None;
-    }
-
-    debug_assert!(chars[index_of_kvp_terminator].1 == '=', "If we are not looking at a space, we must be looking at an equals sign");
-    let key_end_index = index_of_kvp_terminator - 1;
-
-    // The value should start immediately after the '='.
-    let value_start_index = inc(chars, index_of_kvp_terminator);
-    if value_start_index.is_err() {
-        // This is the pathological case where we reached the end of the input such as: "....Key="
-        // In practice we should never reach here except with badly formed lines because such trailing
-        // KVPs should be consumed by `prev_kvp`.
-        return None;
-    }
-    let mut value_start_index = value_start_index.unwrap();
-
-    // Now we can start looking for the value. The value may be a simple word, or it may be in double quotes.
-    let mut value_is_quoted = false;
-    let mut value_end_index = 0;
-    if chars[value_start_index].1 == '"' {
-        // Strip off the leading quote.
-        let idx = inc(&chars, value_start_index);
-        if idx.is_err() {
-            return None;
-        }
-        value_start_index = idx.unwrap();
-
-        let idx = next(chars, value_start_index, limit, |c| c != '"');
-        if idx.is_none() {
-            return None;
-        }
-        value_end_index = idx.unwrap() - 1;
-        value_is_quoted = true;
-    } else if char_is_whitespace(chars[value_start_index].1) {
-        // We have an empty value ("Key= "). Make an empty slice.
-        value_start_index = 0;
-    } else {
-        // We have a KVP of the form "Key=Value". Find the next whitespace character.
-        value_end_index = next_ws(chars, value_start_index, limit).unwrap_or(limit) - 1;
-    }
-
-    Some(KVP {
-        key_start_index,
-        key_end_index,
-        value_start_index,
-        value_end_index,
-        value_is_quoted,
-        .. KVP::default() })
-}
-
-/*
-fn next_kvp2<'t>(line: &'t str, chars: &'t [(usize, char)], current: usize, limit: usize) -> Option<KVPSlices<'t>> {
-    match next_kvp(chars, current, limit) {
-        Some(kvp) => {
-            let (key, value) = kvp.get_kvp_slices(line, &chars);
-            Some(KVPSlices { key, value })
-        },
-
-        None => None
-    }
-}
-
-fn prev_kvp2<'t>(line: &'t str, chars: &'t [(usize, char)], current: usize, limit: usize) -> Option<KVPSlices<'t>> {
-    match prev_kvp(chars, current, limit) {
-        Some(kvp) => {
-            let (key, value) = kvp.get_kvp_slices(line, &chars);
-            Some(KVPSlices { key, value })
-        },
-
-        None => None
-    }
-}
 */
-
-/// Attempts to extract a Key-Value pair starting at current and reading backwards. There are
-/// several possible forms of a KVP:
-/// 
-///     Key=
-///     Key=Value
-///     Key="Value with space"
-/// 
-/// These forms are guaranteed by the logging framework. In particular, there is guaranteed
-/// to be no space around the '=', and the value will be wrapped in double quotes if it has
-/// a quote or a space in it. 'Key' may contain '.', as in "HttpRequest.QueryString".
-/// 
-/// Pre: current is already on the end character ('=', 'e' or '"' in the above examples) and
-/// limit is at least at the beginning of the KVP expression.
-fn prev_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option<KVP> {
-    debug_assert!(current < chars.len(), "current = {}, chars.len() = {}", current, chars.len());
-    debug_assert!(limit < chars.len(), "limit = {}, chars.len() = {}", limit, chars.len());
-    debug_assert!(current >= limit, "current = {}, limit = {}", current, limit);
-
-    fn extract_key(chars: &[(usize, char)], index_of_equals: usize, limit: usize, value_start_index: usize, value_end_index: usize) -> Option<KVP> {
-        // We expect the character immediately before the '=' to be non-ws.
-        let key_end_index = index_of_equals - 1;
-        if char_is_whitespace(chars[key_end_index].1) {
-            return None;
-        }
-
-        let key_start_index = prev_ws(chars, key_end_index, limit);
-        if key_start_index.is_none() {
-            // TODO: This probably should never happen except in badly formed log files.
-            return None;
-        }
-        let key_start_index = key_start_index.unwrap() + 1;
-
-        return Some(KVP {key_start_index, key_end_index, value_start_index, value_end_index, .. KVP::default()})
-    }
-
-
-    let mut value_end_index = current;
-    let current_char = chars[current].1;
-    if char_is_whitespace(current_char) {
-        return None;
-    }
-
-    match current_char {
-        '=' => {
-            // We possibly have an empty KVP of the form 'Key='.
-            extract_key(chars, current, limit, 0, 0)
-        },
-
-        '"' => {
-            // We possibly a KVP of the form 'Key="some value with spaces"'.
-            // First trim off the trailing quote.
-            value_end_index -= 1;
-
-            // Find the previous double quote.
-            let value_start_index = prev(chars, value_end_index, limit, |c| c != '"');
-            if value_start_index.is_none() {
-                // This indicates a badly formed line.
-                return None;
-            }
-
-            // Trim the leading quote.
-            let value_start_index = value_start_index.unwrap() + 1;
-            let index_of_equals = value_start_index - 2;
-            if chars[index_of_equals].1 != '=' {
-                return None;
-            }
-            extract_key(chars, index_of_equals, limit, value_start_index, value_end_index)
-        },
-        _ => {
-            // We possibly a KVP of the form 'Key=Value'. But we may also just be looking at
-            // some random word. We expect to find an '=' before we hit any whitespace.
-            let index_of_equals = prev(chars, current, limit, |c| !(c == '=' || char_is_whitespace(c)));
-            if index_of_equals.is_none() {
-                // This indicates a badly formed line.
-                return None;
-            }
-
-            // Check to see if we hit an '=' first.
-            let index_of_equals = index_of_equals.unwrap();
-            if chars[index_of_equals].1 != '=' {
-                return None;
-            }
-
-            let value_start_index = index_of_equals + 1;
-            extract_key(chars, index_of_equals, limit, value_start_index, value_end_index)
-        }
-    }
-}
 
 impl<'t, 'k> ParsedLine<'t> {
     pub fn new(line: &'t str) -> Result<Self, LineParseError> {
