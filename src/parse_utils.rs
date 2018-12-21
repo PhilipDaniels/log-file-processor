@@ -45,6 +45,7 @@ pub fn char_is_kvp_terminator(c: char) -> bool {
 /// Increment index.
 /// Returns. An error if the increment makes index exceed the last valid index of chars,
 /// otherwise the new index.
+#[inline(always)]
 pub fn inc(chars: &[(usize, char)], mut index: usize) -> Option<usize> {
     index += 1;
     if index >= chars.len() {
@@ -58,6 +59,7 @@ pub fn inc(chars: &[(usize, char)], mut index: usize) -> Option<usize> {
 /// it correctly - start and end are indices into the chars[] array, NOT the line.
 /// We get the actual bounds from the .0 element of the chars tuples.
 /// 'unchecked' means that no checking is done for embedded new lines.
+#[inline(always)]
 pub fn unchecked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, end: usize) -> &'t str {
     &line[chars[start].0 ..= chars[end].0]
 }
@@ -66,6 +68,7 @@ pub fn unchecked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize,
 /// it correctly - start and end are indices into the chars[] array, NOT the line.
 /// We get the actual bounds from the .0 element of the chars tuples.
 /// 'checked' means that any embedded \r or \n characters will be replaced with spaces.
+#[inline(always)]
 pub fn checked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, end: usize) -> Cow<'t, str> {
     let slice = unchecked_slice(line, chars, start, end);
     if slice.contains(|c| c == '\r' || c == '\n') {
@@ -78,6 +81,7 @@ pub fn checked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, e
 
 // While PRED(c) is true, the index is advanced.
 // So in effect, p is a function that says 'if c matches this, keep going'
+#[inline(always)]
 pub fn next<PRED>(chars: &[(usize, char)], mut current: usize, limit: usize, pred: PRED) -> Option<usize>
     where PRED: Fn(char) -> bool
 {
@@ -94,6 +98,7 @@ pub fn next<PRED>(chars: &[(usize, char)], mut current: usize, limit: usize, pre
 
 // While PRED(c) is true, the index is shrunk.
 // So in effect, p is a function that says 'if c matches this, keep going'
+#[inline(always)]
 pub fn prev<PRED>(chars: &[(usize, char)], mut current: usize, limit: usize, pred: PRED) -> Option<usize>
     where PRED: Fn(char) -> bool
 {
@@ -111,6 +116,7 @@ pub fn prev<PRED>(chars: &[(usize, char)], mut current: usize, limit: usize, pre
 /// Pre: current and limit are valid indexes into chars[].
 /// Returns: None if a ws character cannot be found within the limited range,
 /// otherwise Ok(n) where n will be on the first whitespace character.
+#[inline(always)]
 pub fn next_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
     next(chars, current, limit, |c| !char_is_whitespace(c))
 }
@@ -118,17 +124,20 @@ pub fn next_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<
 /// Pre: current and limit are valid indexes into chars[].
 /// Returns: None if a non-ws character cannot be found within the limited range,
 /// otherwise Ok(n) where n will be on the first non-whitespace character.
+#[inline(always)]
 pub fn next_none_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
     next(chars, current, limit, char_is_whitespace)
 }
 
 /// Like `next_none_ws`, but also skips pipe characters ('|'). Used when extracting the prologue.
+#[inline(always)]
 pub fn next_none_ws_or_pipe(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
     next(chars, current, limit, |c| char_is_whitespace(c) || c == '|')
 }
 
 /// Pre: chars[current] has already been dealt with (e.g. it may be the inclusive end of a word).
 /// Like `next_none_ws_or_pipe`, but always tries to move on to the next character.
+#[inline(always)]
 pub fn next_none_ws_or_pipe_after(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
     let potential_next = inc(chars, current);
     if potential_next.is_none() {
@@ -141,6 +150,7 @@ pub fn next_none_ws_or_pipe_after(chars: &[(usize, char)], current: usize, limit
 /// Pre: current and limit are valid indexes into chars[].
 /// Returns: None if a non-ws character cannot be found within the limited range,
 /// otherwise Ok(n) where n will be on the last non-whitespace character.
+#[inline(always)]
 pub fn prev_none_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
     prev(chars, current, limit, char_is_whitespace)
 }
@@ -148,6 +158,7 @@ pub fn prev_none_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Op
 /// Pre: current and limit are valid indexes into chars[].
 /// Returns: None if a ws character cannot be found within the limited range,
 /// otherwise Ok(n) where n will be on the first whitespace character.
+#[inline(always)]
 pub fn prev_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<usize> {
     prev(chars, current, limit, |c| !char_is_whitespace(c))
 }
@@ -157,6 +168,7 @@ pub fn prev_ws(chars: &[(usize, char)], current: usize, limit: usize) -> Option<
 /// For "2018" with current of 0 and limit of 3 (the '8'), there are 3 + 1 - 0
 /// characters available.
 /// Returns: the number of characters available within the window.
+#[inline(always)]
 pub fn num_chars_available(current: usize, limit: usize) -> usize {
     (limit + 1) - current
 }

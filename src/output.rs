@@ -1,6 +1,5 @@
 /// This module is responsible for preparing an output record from a ParsedLine.
 
-use std::borrow::Cow;
 use crate::config::{self, Config};
 use crate::inputs::{Column, is_date_column};
 use crate::parsed_line::ParsedLine;
@@ -19,7 +18,8 @@ pub fn make_output_record<'p>(parsed_line: &'p ParsedLine, columns: &'p [Column]
             _ => {
                 match parsed_line.kvps.get_value(&column.name) {
                     Some(val) => data.push(val.to_string()),
-                    None => data.push(try_extract_from_message(parsed_line, &column)),
+                    None => // TODO: Check for alternate names first. Then check for name and alternate names in the message.
+                     data.push(try_extract_from_message(parsed_line, &column)),
                 }
             },
         }
@@ -37,15 +37,15 @@ fn try_extract_from_message<'p>(parsed_line: &'p ParsedLine, column: &'p Column)
     }
     let captures = captures.unwrap();
 
-    let text = if is_date_column(&column.name) {
+    let mut text = if is_date_column(&column.name) {
         let capture_names = column.regex.capture_names().collect::<Vec<_>>();
-        cleanup_slice(&extract_date(captures, &capture_names)).to_string()
+        extract_date(captures, &capture_names)
     } else {
-        cleanup_slice(extract_kvp(captures)).to_string()
+        extract_kvp(captures).to_string()
     };
 
-
-    "".to_string()
+    text = text.replace(|c| c == '\r' || c == '\n', " ");
+    text.trim().to_string()
 }
 
 fn extract_date(captures: Captures, capture_names: &[Option<&str>]) -> String {
@@ -118,8 +118,59 @@ fn extract_kvp<'t>(captures: Captures<'t>) -> &'t str {
     }
 }
 
-// Cleanup the text. Doing this here keeps regexes simpler.
-// The '.' deals with people using full-stops in log messages.
-fn cleanup_slice(text: &str) -> &str {
-    text.trim_matches(|c| c == '.' || char::is_whitespace(c))
+#[cfg(test)]
+mod make_output_record_extract_kvp_from_message_tests {
+    use super::*;
+    use crate::regexes;
+
+    fn testing_columns() -> Vec<Column> {
+        vec![
+            Column { name: "Foo".to_string(), regex: regexes::make_regex_for_column("Foo") }
+        ]
+    }
+
+    #[test]
+    pub fn when_kvp_exists_in_message() {
+        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo=Bar some words  SysRef=1").expect("Parse should succeed");
+        let columns = testing_columns();
+        let data = make_output_record(&parsed_line, &columns);
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0], "Bar");
+    }
+
+    #[test]
+    pub fn when_kvp_exists_in_message_with_double_quotes() {
+        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo=\"Bar some\" words  SysRef=1").expect("Parse should succeed");
+        let columns = testing_columns();
+        let data = make_output_record(&parsed_line, &columns);
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0], "Bar some");
+    }
+
+    #[test]
+    pub fn when_kvp_exists_in_message_with_empty_value() {
+        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo= some words  SysRef=1").expect("Parse should succeed");
+        let columns = testing_columns();
+        let data = make_output_record(&parsed_line, &columns);
+        assert_eq!(data.len(), 1, "Because we push an empty string if no match is found");
+        assert_eq!(data[0], "");
+    }
+
+    #[test]
+    pub fn when_kvp_exists_in_message_and_trailing_kvps() {
+        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo=Bar some words  SysRef=1 Foo=Canada").expect("Parse should succeed");
+        let columns = testing_columns();
+        let data = make_output_record(&parsed_line, &columns);
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0], "Canada", "Trailing KVPs should have priority");
+    }
+
+    #[test]
+    pub fn when_kvp_does_not_exist_in_message() {
+        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Kibble=Bar some words  SysRef=1").expect("Parse should succeed");
+        let columns = testing_columns();
+        let data = make_output_record(&parsed_line, &columns);
+        assert_eq!(data.len(), 1, "Because we push an empty string if no match is found");
+        assert_eq!(data[0], "");
+    }
 }

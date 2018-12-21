@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use regex::{Regex, RegexBuilder};
+use regex::{Regex};
 use crate::config::Config;
 use crate::regexes;
 
@@ -95,13 +95,9 @@ impl Inputs {
             }
 
             let regex = match config.output_file_spec.column_extractors.get(column) {
-                Some(custom_pattern) => RegexBuilder::new(custom_pattern),
-                None                 => if is_date_column(column) {
-                                            RegexBuilder::new(&regexes::make_date_pattern())
-                                        } else {
-                                            RegexBuilder::new(&regexes::make_kvp_pattern(column))
-                                        },
-            }.case_insensitive(true).build().unwrap();
+                Some(custom_pattern) => regexes::make_regex_for_pattern(custom_pattern),
+                None                 => regexes::make_regex_for_column(column),
+            };
             
             i.columns.push(Column { name: column.to_string(), regex: regex });
         }

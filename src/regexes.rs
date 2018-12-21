@@ -1,3 +1,6 @@
+use regex::{Regex, RegexBuilder};
+use crate::inputs::is_date_column;
+
 /// Makes a regex that extracts key-value pairs of the form
 ///    Key=Value                            or
 ///    Key="Some value in double quotes"
@@ -29,4 +32,16 @@ pub fn make_date_pattern() -> String {
 
 pub fn make_log_date_pattern() -> String {
     format!("^{}|^{}", STANDARD_DATE_PATTERN, YMD_DASH_PATTERN)
+}
+
+pub fn make_regex_for_column(column_name: &str) -> Regex {
+    if is_date_column(column_name) {
+        RegexBuilder::new(&make_date_pattern())
+    } else {
+        RegexBuilder::new(&make_kvp_pattern(column_name))
+    }.case_insensitive(true).build().unwrap()
+}
+
+pub fn make_regex_for_pattern(pattern: &str) -> Regex {
+    RegexBuilder::new(pattern).case_insensitive(true).build().unwrap()
 }
