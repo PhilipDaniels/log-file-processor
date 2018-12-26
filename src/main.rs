@@ -3,11 +3,14 @@ use std::io::{BufReader};
 use std::time::Instant;
 use std::thread;
 use std::env;
+use std::io;
 use csv::{Writer, WriterBuilder};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, HumanBytes, HumanDuration};
+use structopt::StructOpt;
 
 mod fast_logfile_iterator;
 mod config;
+mod configuration;
 mod inputs;
 mod kvps;
 mod output;
@@ -15,6 +18,7 @@ mod parse_utils;
 mod parsed_line;
 mod regexes;
 use crate::config::{Config};
+use crate::configuration::{Arguments, Options, Configuration};
 use crate::inputs::{Inputs, InputFile, Column};
 use crate::parsed_line::ParsedLine;
 
@@ -24,6 +28,7 @@ use crate::parsed_line::ParsedLine;
 [ ] I had to change make_output_record return type from "&'p str" to String. Can it be a Cow instead?
     Problem is the CSV writer cannot handle it.
 [ ] If column is a date/datetime, attempt to reformat the raw string.
+    Use Chrono for DateTimes. https://rust-lang-nursery.github.io/rust-cookbook/datetime/parse.html#parse-string-into-datetime-struct
 [ ] Sort (the contents of) the output files.
 [ ] Perf: Test inlining performance. 
 [ ] Perf: Test swapping the 'limit' checks.
@@ -34,53 +39,83 @@ use crate::parsed_line::ParsedLine;
 [ ] Filter: sysref
 [ ] Filter: column is non-blank, e.g. for call recorder execution time
 [ ] Filter: column matches a regex, ANY column matches a regex. DOES NOT MATCH, e.g. to get rid of heartbeats.
-[ ] Option: trim message to N chars.
-[ ] Option: quiet mode. No progress bars.
 [ ] Bug: we have some bad parsing in some files. It might just be because I have corrupted the file with an editor.
        Need to get the original files again.
 */
 
-fn main() {
-    let mut config = Config::default();
+fn main() -> Result<(), io::Error> {
+    let args = Arguments::from_args();
+    println!("Args = {:#?}", args);
 
-    // Temp code: allow a set of files on the command line to override the default.
-    let args: Vec<_> = env::args().collect();
-    if args.len() > 1 {
-        config.input_file_specs.clear();
-        config.input_file_specs.extend(args[1..].iter().map(|arg| arg.to_string()));
-    }
-    let inputs = Inputs::new_from_config(&config);
-
-    if inputs.is_empty() {
-        eprintln!("No input to process.");
-        return;
+    if args.dump_config {
+        let options = Options::default();
+        let json = serde_json::to_string_pretty(&options)?;
+        println!("{}", json);
+        return Ok(());
     }
 
-    let start_time = Instant::now();
+    let options = match dirs::home_dir() {
+        Some(mut path) => {
+            path.push(".lpf.json");
+            match File::open(path) {
+                Ok(f) => serde_json::from_reader(f)?,
+                Err(ref e) if e.kind() == io::ErrorKind::NotFound => Options::default(),
+                Err(e) => panic!("Error opening ~/.lpf.json: {:?}", e)
+            }
+        },
+        None => {
+            eprintln!("Cannot locate home directory, using default configuration.");
+            Options::default()
+        } 
+    };
 
-    // TODO: What we would really like is to have N threads AT MOST processing at 
-    // any one time. Say, N = 4, for example. Then we create new threads as existing
-    // ones complete. Rayon would set N for us, but I can't get it to work with
-    // the MultiProgress bar.
-    let mp = MultiProgress::new();
+    println!("Options = {:#?}", options);
 
-    let longest_len = inputs.longest_input_name_len();
-    for input_file in &inputs.input_files {
-        let input_file = input_file.clone();
-        let pb = make_progress_bar(longest_len, &mp, &input_file);
-        let columns = inputs.columns.clone();
-        let _ = thread::spawn(move || {
-            process_log_file(pb, input_file, &columns);
-        });
-    }
+    let configuration = Configuration::new(&options, &args);
 
-    mp.join().unwrap();
+    Ok(())
 
-    let total_bytes = inputs.input_files.iter().map(|f| f.length as u64).sum();
-    println!("Processed {} in {} files in {}",
-        HumanBytes(total_bytes),
-        inputs.input_files.len(),
-        HumanDuration(start_time.elapsed()));
+    // let mut config = Config::default();
+
+    // // Temp code: allow a set of files on the command line to override the default.
+    // let args: Vec<_> = env::args().collect();
+    // if args.len() > 1 {
+    //     config.input_file_specs.clear();
+    //     config.input_file_specs.extend(args[1..].iter().map(|arg| arg.to_string()));
+    // }
+    // let inputs = Inputs::new_from_config(&config);
+
+    // if inputs.is_empty() {
+    //     eprintln!("No input to process.");
+    //     return;
+    // }
+
+    // let start_time = Instant::now();
+
+    // // TODO: What we would really like is to have N threads AT MOST processing at 
+    // // any one time. Say, N = 4, for example. Then we create new threads as existing
+    // // ones complete. Rayon would set N for us, but I can't get it to work with
+    // // the MultiProgress bar.
+    // let mp = MultiProgress::new();
+
+    // let longest_len = inputs.longest_input_name_len();
+    // for input_file in &inputs.input_files {
+    //     let input_file = input_file.clone();
+    //     let pb = make_progress_bar(longest_len, &mp, &input_file);
+    //     let columns = inputs.columns.clone();
+    //     let _ = thread::spawn(move || {
+    //         process_log_file(pb, input_file, &columns);
+    //     });
+    // }
+
+    // mp.join().unwrap();
+
+    // let total_bytes = inputs.input_files.iter().map(|f| f.length as u64).sum();
+    // println!("Processed {} in {} files in {}",
+    //     HumanBytes(total_bytes),
+    //     inputs.input_files.len(),
+    //     HumanDuration(start_time.elapsed()));
+
 }
 
 fn make_progress_bar(longest_filename_length: usize, mp: &MultiProgress, input_file: &InputFile) -> ProgressBar {
