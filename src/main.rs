@@ -17,8 +17,7 @@ mod output;
 mod parse_utils;
 mod parsed_line;
 mod regexes;
-use crate::config::{Config};
-use crate::configuration::{Arguments, Options, Configuration};
+use crate::configuration::{Arguments, Options, get_config};
 use crate::inputs::{Inputs, InputFile, Column};
 use crate::parsed_line::ParsedLine;
 
@@ -69,9 +68,8 @@ fn main() -> Result<(), io::Error> {
         } 
     };
 
-    println!("Options = {:#?}", options);
-
-    let configuration = Configuration::new(&options, &args);
+    let configuration = get_config(&options, &args);
+    println!("configuration = {:#?}", configuration);
 
     Ok(())
 
