@@ -1,8 +1,8 @@
 use std::collections::{HashMap};
-use regex::{Regex};
+use regex::{Regex, RegexBuilder};
+
 use crate::arguments::Arguments;
 use crate::profiles::{Profile, ProfileSet, vec_add_entry};
-use crate::regexes::{make_case_insensitive_regex_for_pattern, make_kvp_pattern};
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const DEFAULT_MAX_MESSAGE_LENGTH: usize = 1000000;
@@ -31,6 +31,18 @@ pub struct Configuration {
     /// each column. If a column has no entry in here, then it is retrieved from the
     /// extracted KVPs or using a default regex to probe the message text itself.
     pub column_regexes: HashMap<String, Regex>,
+}
+
+/// Makes a regex that extracts key-value pairs of the form
+///    Key=Value
+///    or
+///    Key="Some value in double quotes"
+fn make_kvp_pattern(key_name: &str) -> String {
+    format!(r###"\W{0}="(.*?)"|\W{0}=(\S*)"###, regex::escape(key_name))
+}
+
+fn make_case_insensitive_regex_for_pattern(pattern: &str) -> Regex {
+    RegexBuilder::new(pattern).case_insensitive(true).build().unwrap()
 }
 
 impl From<Profile> for Configuration {

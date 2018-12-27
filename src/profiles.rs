@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use serde_derive::{Serialize, Deserialize};
+
 use crate::configuration::{DEFAULT_PROFILE_NAME, DEFAULT_MAX_MESSAGE_LENGTH};
 use crate::parse_utils::{LOG_DATE, LOG_LEVEL, MESSAGE};
 
@@ -17,7 +18,7 @@ pub struct Profile {
     pub columns: Vec<String>,
 
     /// A sparse map specifying alternate names for a column. The nominal column name
-    /// is the key of the HashMap, it is this column name which should appear in the 
+    /// is the key of the HashMap, it is this column name which should appear in the
     /// columns collection. If a value for a column cannot be found under its preferred
     /// name, then the vector is checked for any alternate names and a lookup is
     /// attempted for them. This allows for instance, a column called "AppName" to locate

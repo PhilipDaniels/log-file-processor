@@ -1,9 +1,9 @@
 /// This module is responsible for preparing an output record from a ParsedLine.
+use regex::Captures;
+
 use crate::configuration::Configuration;
-use crate::inputs::{is_date_column};
 use crate::parsed_line::ParsedLine;
 use crate::parse_utils;
-use regex::{Captures};
 
 pub fn make_output_record<'p>(config: &Configuration, parsed_line: &'p ParsedLine) -> Vec<String> {
     let mut data = Vec::new();
@@ -50,13 +50,6 @@ fn try_extract_from_message<'p>(config: &Configuration, parsed_line: &'p ParsedL
     }
 
     "".to_string()
-
-    // let mut text = if is_date_column(&column.name) {
-    //     let capture_names = column.regex.capture_names().collect::<Vec<_>>();
-    //     extract_date(captures, &capture_names)
-    // } else {
-    //     extract_kvp(captures).to_string()
-    // };
 }
 
 fn extract_kvp_value<'t>(captures: Captures<'t>) -> &'t str {
@@ -65,68 +58,6 @@ fn extract_kvp_value<'t>(captures: Captures<'t>) -> &'t str {
         Some(m) => return m.as_str(),
         None => return ""
     }
-}
-
-fn extract_date(captures: Captures, capture_names: &[Option<&str>]) -> String {
-    // Typical values for capture_names are:
-    //      KVP regex : [None, None, None, None, None]
-    //      Date regex: [None, Some("year"), Some("month"), Some("day"), Some("hour"), Some("minutes"), Some("seconds"), Some("fractions"), Some("year2"), Some("month2"), Some("day2")]
-
-    // We consider the following combinations to be valid extractions.
-    //      (year, month, day)
-    //      (year, month, day, hour, minutes, seconds)
-    //      (year, month, day, hour, minutes, seconds, fractions)
-    // Anything else we consider to be a bad match.
-
-    let year = extract_date_part("year", &captures, capture_names);
-    if year.is_empty() { return "".to_string() };
-
-    let month = extract_date_part("month", &captures, capture_names);
-    if month.is_empty() { return "".to_string() };
-
-    let day = extract_date_part("day", &captures, capture_names);
-    if day.is_empty() { return "".to_string() };
-
-    let hour = extract_date_part("hour", &captures, capture_names);
-    if hour.is_empty() {
-        return format!("{}-{}-{}", year, month, day);
-    };
-
-    let minutes = extract_date_part("minutes", &captures, capture_names);
-    if minutes.is_empty() {
-        return format!("{}-{}-{}", year, month, day);
-    };
-
-    let seconds = extract_date_part("seconds", &captures, capture_names);
-    if seconds.is_empty() {
-        return format!("{}-{}-{}", year, month, day);
-    };
-
-    let fractions = extract_date_part("fractions", &captures, capture_names);
-    if fractions.is_empty() {
-        format!("{}-{}-{} {}:{}:{}", year, month, day, hour, minutes, seconds)
-    } else {
-        format!("{}-{}-{} {}:{}:{}.{}", year, month, day, hour, minutes, seconds, fractions)
-    }
-}
-
-fn extract_date_part<'t>(part: &str, captures: &'t Captures, capture_names: &[Option<&str>]) -> &'t str {
-    for name in capture_names {
-        if name.is_none() {
-            continue;
-        }
-
-        let match_name = name.as_ref().unwrap();
-        if match_name.starts_with(part) {
-            let the_match = captures.name(match_name);
-            match the_match {
-                Some(m) => return m.as_str(),
-                None => panic!("Because we have a match name, this should never be called.")
-            }
-        }
-    }
-
-    ""
 }
 
 /*

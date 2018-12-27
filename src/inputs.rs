@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::configuration::Configuration;
 
 /// The inputs module represents the set of files to be processed by the program.
-/// The top-level struct is 'Inputs'. This is constructed based on the 'Config'.
+/// The top-level struct is 'Inputs'. This is constructed based on the 'Configuration'.
 /// Various simple things are pre-calculated to avoid having to calculate them in
 /// the middle of parsing a file.
 
@@ -45,12 +45,6 @@ impl InputFile {
     }
 }
 
-
-pub fn is_date_column(column_name: &str) -> bool {
-    let n = column_name.to_lowercase();
-    n.ends_with("date") || n.ends_with("datetime")
-}
-
 impl Inputs {
     pub fn new_from_config(config: &Configuration) -> Self {
         use glob::glob;
@@ -72,26 +66,6 @@ impl Inputs {
         }
 
         i.files.sort();
-
-        // // Build complete set of columns. Each column is given a regex that
-        // // will extract it. Some of these are duplicates, but by pre-calculating
-        // // all these entries we ensure downstream code is simpler, as it can
-        // // focus on extracting data rather than ensuring it has all the things
-        // // it needs to do that extraction.
-        // for column in &config.output_file_spec.columns {
-        //     if i.contains_column(column) {
-        //         eprintln!("The column {} is already specified, ignoring subsequent specification.", column);
-        //         continue;
-        //     }
-
-        //     let regex = match config.output_file_spec.column_extractors.get(column) {
-        //         Some(custom_pattern) => regexes::make_case_insensitive_regex_for_pattern(custom_pattern),
-        //         None                 => regexes::make_regex_for_column(column),
-        //     };
-            
-        //     i.columns.push(Column { name: column.to_string(), regex: regex });
-        // }
-
         i
     }
 

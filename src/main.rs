@@ -17,7 +17,6 @@ mod output;
 mod parse_utils;
 mod parsed_line;
 mod profiles;
-mod regexes;
 use crate::arguments::Arguments;
 use crate::fast_logfile_iterator::FastLogFileIterator;
 use crate::profiles::ProfileSet;
@@ -33,10 +32,8 @@ use crate::inputs::{Inputs, InputFile};
 [ ] If column is a date/datetime, attempt to reformat the raw string.
     Use Chrono for DateTimes. https://rust-lang-nursery.github.io/rust-cookbook/datetime/parse.html#parse-string-into-datetime-struct
 [ ] Sort (the contents of) the output files.
-[ ] Perf: Test inlining performance. 
-[ ] Perf: Test swapping the 'limit' checks.
+[ ] Perf: Test inlining performance.
 [ ] Perf: More parallelism while processing an individual file.
-[ ] Allow alternate names for columns (AppName, ApplicationName)
 [ ] Allow custom regex extractors for columns.
 [ ] Filter: from/to dates
 [ ] Filter: sysref
@@ -69,7 +66,7 @@ fn main() -> Result<(), io::Error> {
         None => {
             eprintln!("Cannot locate home directory, using default configuration.");
             ProfileSet::default()
-        } 
+        }
     };
 
     let configuration = get_config(&profiles, &args);
@@ -85,7 +82,7 @@ fn main() -> Result<(), io::Error> {
 
     let start_time = Instant::now();
 
-    // TODO: What we would really like is to have N threads AT MOST processing at 
+    // TODO: What we would really like is to have N threads AT MOST processing at
     // any one time. Say, N = 4, for example. Then we create new threads as existing
     // ones complete. Rayon would set N for us, but I can't get it to work with
     // the MultiProgress bar.
@@ -115,10 +112,10 @@ fn make_progress_bar(longest_filename_length: usize, mp: &MultiProgress, input_f
 
     let prefix = format!("{:>width$}: ", input_file.filename_only_as_string, width=longest_filename_length + 1);
     pb.set_prefix(&prefix);
-    
+
     // Redraw every 1% of additional progress. Without this, redisplaying
     // the progress bar slows the program down a lot.
-    pb.set_draw_delta(input_file.length as u64 / 100); 
+    pb.set_draw_delta(input_file.length as u64 / 100);
 
     pb
 }

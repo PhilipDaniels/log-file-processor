@@ -33,11 +33,13 @@ pub const MESSAGE: &str = "Message";
 
 
 /// A custom function corresponding to our definition of whitespace.
+#[inline(always)]
 pub fn char_is_whitespace(c: char) -> bool {
     c == ' ' || c == '\r' || c == '\n' || c == '\t'
 }
 
 /// A function to be used when parsing KVPs.
+#[inline(always)]
 pub fn char_is_kvp_terminator(c: char) -> bool {
     c == '=' || char_is_whitespace(c)
 }
@@ -56,6 +58,7 @@ pub fn inc(chars: &[(usize, char)], mut index: usize) -> Option<usize> {
 }
 
 /// Makes a string safe for CSV by replacing \r and \n with spaces.
+#[inline(always)]
 pub fn safe_string(value: &str) -> String {
     value.replace(|c| c == '\r' || c == '\n', " ")
 }

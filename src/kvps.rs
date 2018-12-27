@@ -34,18 +34,6 @@ impl<'t> KVPCollection<'t> {
         None
     }
 
-    /// Gets a KVP, looking it up case-insensitively by the specified key.
-    #[cfg(test)]
-    pub fn get(&self, key: &str) -> Option<&KVPStrings> {
-        for kvp in &self.kvps {
-            if kvp.key.eq_ignore_ascii_case(key) {
-                return Some(&kvp);
-            }
-        }
-
-        None
-    }
-
     /// Gets a value, looking it up case-insensitively by the specified key.
     /// Panics if the key is not in the collection. Helps keep tests short.
     #[cfg(test)]
@@ -130,15 +118,15 @@ impl KVPParseData {
 
 /// Attempts to extract a Key-Value pair starting at current and reading forward. There are
 /// several possible forms of a KVP:
-/// 
+///
 ///     Key=
 ///     Key=Value
 ///     Key="Value with space"
-/// 
+///
 /// These forms are guaranteed by the logging framework. In particular, there is guaranteed
 /// to be no space around the '=', and the value will be wrapped in double quotes if it has
 /// a quote or a space in it. 'Key' may contain '.', as in "HttpRequest.QueryString".
-/// 
+///
 /// Pre: current is already on the start character ('K' in the above example) and limit
 /// is at least at the end of the KVP expression.
 pub fn next_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option<KVPParseData> {
@@ -218,15 +206,15 @@ pub fn next_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option
 
 /// Attempts to extract a Key-Value pair starting at current and reading backwards. There are
 /// several possible forms of a KVP:
-/// 
+///
 ///     Key=
 ///     Key=Value
 ///     Key="Value with space"
-/// 
+///
 /// These forms are guaranteed by the logging framework. In particular, there is guaranteed
 /// to be no space around the '=', and the value will be wrapped in double quotes if it has
 /// a quote or a space in it. 'Key' may contain '.', as in "HttpRequest.QueryString".
-/// 
+///
 /// Pre: current is already on the end character ('=', 'e' or '"' in the above examples) and
 /// limit is at least at the beginning of the KVP expression.
 pub fn prev_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option<KVPParseData> {
@@ -314,7 +302,7 @@ mod kvp_collection_tests {
         let mut sut = KVPCollection::default();
         sut.insert(KVPStrings { key: "car", value: "ford".into() });
         sut.insert(KVPStrings { key: "car", value: "volvo".into() });
-        
+
         assert_eq!(sut.len(), 1);
         assert_eq!(sut.value("car"), "ford");
     }
@@ -324,7 +312,7 @@ mod kvp_collection_tests {
         let mut sut = KVPCollection::default();
         sut.insert(KVPStrings { key: "car", value: "ford".into() });
         sut.insert(KVPStrings { key: "truck", value: "volvo".into() });
-        
+
         assert_eq!(sut.len(), 2);
         assert_eq!(sut.value("car"), "ford");
         assert_eq!(sut.value("truck"), "volvo");
