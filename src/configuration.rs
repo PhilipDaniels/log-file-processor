@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use regex::{Regex};
 use crate::arguments::Arguments;
 use crate::profiles::{Profile, ProfileSet, vec_add_entry};
+use crate::regexes::make_case_insensitive_regex_for_pattern;
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const DEFAULT_MAX_MESSAGE_LENGTH: usize = 1000000;
@@ -28,35 +30,54 @@ pub struct Configuration {
     /// A sparse map of ColumnName -> Regex, regular expressions to be used to extract
     /// each column. If a column has no entry in here, then it is retrieved from the
     /// extracted KVPs or using a default regex to probe the message text itself.
-    pub column_regexes: HashMap<String, String>,
+    pub column_regexes: HashMap<String, Regex>,
 }
 
 impl From<Profile> for Configuration {
     fn from(p: Profile) -> Self {
-        Configuration {
+        let mut config = Configuration {
             name: p.name,
             quiet: p.quiet.unwrap_or(false),
             max_message_length: p.max_message_length.unwrap_or(DEFAULT_MAX_MESSAGE_LENGTH),
             columns: p.columns,
             alternate_column_names: p.alternate_column_names,
             file_patterns: p.file_patterns,
-            column_regexes: p.column_regexes
+            column_regexes: HashMap::new(),
+        };
+
+        for (column_name, pattern) in p.column_regexes {
+            config.add_column_regex(column_name, &pattern);
         }
+
+        config
     }
 }
 
 impl Configuration {
-    pub fn add_column(&mut self, column_name: String) {
+    pub fn add_column<S>(&mut self, column_name: S)
+        where S: Into<String>
+    {
         vec_add_entry(column_name, &mut self.columns);
     }
 
-    pub fn add_alternate_column(&mut self, main_column_name: &str, alternate_column_name: String) {
+    pub fn add_alternate_column<S>(&mut self, main_column_name: &str, alternate_column_name: S)
+        where S: Into<String>
+    {
         let alternate_names = self.alternate_column_names.entry(main_column_name.to_string()).or_default();
         vec_add_entry(alternate_column_name, alternate_names);
     }
 
-    pub fn add_file_pattern(&mut self, file_pattern: String) {
+    pub fn add_file_pattern<S>(&mut self, file_pattern: S)
+        where S: Into<String>
+    {
         vec_add_entry(file_pattern, &mut self.file_patterns);
+    }
+
+    pub fn add_column_regex<S>(&mut self, column_name: S, pattern: &str)
+        where S: Into<String>
+    {
+        let regex = make_case_insensitive_regex_for_pattern(pattern);
+        self.column_regexes.insert(column_name.into(), regex);
     }
 }
 
@@ -97,6 +118,10 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
         for pat in &override_profile.file_patterns {
             config.add_file_pattern(pat.to_string());
         }
+
+        for (column_name, pattern) in &override_profile.column_regexes {
+            config.add_column_regex(column_name.clone(), &pattern);
+        }
     }
 
     // Now apply overrides from the command line arguments.
@@ -134,12 +159,12 @@ mod get_config_tests {
         let mut profile = Profile::blank();
         profile.name = "over".to_string();
         profile.quiet = Some(true);
-        profile.add_column("col1".to_string());
-        profile.add_column("col2".to_string());
-        profile.add_alternate_column("PID", "ProcessId".to_string());
-        profile.add_alternate_column("PID", "ProcId".to_string());
-        profile.add_alternate_column("TID", "ThreadId".to_string());
-        profile.add_file_pattern("case*.log".to_string());
+        profile.add_column("col1");
+        profile.add_column("col2");
+        profile.add_alternate_column("PID", "ProcessId");
+        profile.add_alternate_column("PID", "ProcId");
+        profile.add_alternate_column("TID", "ThreadId");
+        profile.add_file_pattern("case*.log");
         profile
     }
 

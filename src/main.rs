@@ -48,16 +48,16 @@ use crate::parsed_line::ParsedLine;
 
 fn main() -> Result<(), io::Error> {
     let args = Arguments::from_args();
-    println!("Args = {:#?}", args);
+    //println!("Args = {:#?}", args);
 
     if args.dump_config {
-        let options = ProfileSet::default();
-        let json = serde_json::to_string_pretty(&options)?;
+        let profiles = ProfileSet::default();
+        let json = serde_json::to_string_pretty(&profiles)?;
         println!("{}", json);
         return Ok(());
     }
 
-    let options = match dirs::home_dir() {
+    let profiles = match dirs::home_dir() {
         Some(mut path) => {
             path.push(".lpf.json");
             match File::open(path) {
@@ -72,8 +72,9 @@ fn main() -> Result<(), io::Error> {
         } 
     };
 
-    let configuration = get_config(&options, &args);
-    println!("configuration = {:#?}", configuration);
+    let configuration = get_config(&profiles, &args);
+    //println!("profiles = {:#?}", profiles);
+    //println!("configuration = {:#?}", configuration);
 
     Ok(())
 

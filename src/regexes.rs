@@ -42,6 +42,6 @@ pub fn make_regex_for_column(column_name: &str) -> Regex {
     }.case_insensitive(true).build().unwrap()
 }
 
-pub fn make_regex_for_pattern(pattern: &str) -> Regex {
+pub fn make_case_insensitive_regex_for_pattern(pattern: &str) -> Regex {
     RegexBuilder::new(pattern).case_insensitive(true).build().unwrap()
 }

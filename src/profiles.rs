@@ -33,13 +33,16 @@ pub struct Profile {
     pub column_regexes: HashMap<String, String>,
 }
 
-fn vec_has_entry(column_name: &str, vec: &Vec<String>) -> bool {
-    vec.iter().any(|c| c.eq_ignore_ascii_case(column_name))
+fn vec_has_entry(entry: &str, vec: &Vec<String>) -> bool {
+    vec.iter().any(|c| c.eq_ignore_ascii_case(entry))
 }
 
-pub fn vec_add_entry(column_name: String, vec: &mut Vec<String>) {
-    if !vec_has_entry(&column_name, vec) {
-        vec.push(column_name);
+pub fn vec_add_entry<S>(entry: S, vec: &mut Vec<String>)
+    where S: Into<String>
+{
+    let entry = entry.into();
+    if !vec_has_entry(&entry, vec) {
+        vec.push(entry);
     }
 }
 
@@ -62,17 +65,23 @@ impl Profile {
             self.alternate_column_names.values().any(|acns| vec_has_entry(column_name, acns))
     }
 
-    pub fn add_column(&mut self, column_name: String) {
+    pub fn add_column<S>(&mut self, column_name: S)
+        where S: Into<String>
+    {
         vec_add_entry(column_name, &mut self.columns);
     }
 
-    pub fn add_alternate_column(&mut self, main_column_name: &str, alternate_column_name: String) {
+    pub fn add_alternate_column<S>(&mut self, main_column_name: &str, alternate_column_name: S)
+        where S: Into<String>
+    {
         let alternate_names = self.alternate_column_names.entry(main_column_name.to_string()).or_default();
         vec_add_entry(alternate_column_name, alternate_names);
     }
 
     #[cfg(test)]
-    pub fn add_file_pattern(&mut self, file_pattern: String) {
+    pub fn add_file_pattern<S>(&mut self, file_pattern: S)
+        where S: Into<String>
+    {
         vec_add_entry(file_pattern, &mut self.file_patterns);
     }
 }
@@ -84,28 +93,28 @@ impl Default for Profile {
         p.quiet = Some(false);
         p.max_message_length = Some(DEFAULT_MAX_MESSAGE_LENGTH);
 
-        p.add_column(LOG_DATE.to_string());
-        p.add_column(LOG_LEVEL.to_string());
-        p.add_column("MachineName".to_string());
-        p.add_column("AppName".to_string());
-        p.add_column("PID".to_string());
-        p.add_column("TID".to_string());
-        p.add_column("SysRef".to_string());
-        p.add_column("Action".to_string());
-        p.add_column("Source".to_string());
-        p.add_column("CorrelationKey".to_string());
-        p.add_column("CallRecorderExecutionTime".to_string());
-        p.add_column("Http.RequestId".to_string());
-        p.add_column("Http.RequestQueryString".to_string());
-        p.add_column("Http.Request.Path".to_string());
-        p.add_column("UserName".to_string());
-        p.add_column("UserIdentity".to_string());
-        p.add_column(MESSAGE.to_string());
+        p.add_column(LOG_DATE);
+        p.add_column(LOG_LEVEL);
+        p.add_column("MachineName");
+        p.add_column("AppName");
+        p.add_column("PID");
+        p.add_column("TID");
+        p.add_column("SysRef");
+        p.add_column("Action");
+        p.add_column("Source");
+        p.add_column("CorrelationKey");
+        p.add_column("CallRecorderExecutionTime");
+        p.add_column("Http.RequestId");
+        p.add_column("Http.RequestQueryString");
+        p.add_column("Http.Request.Path");
+        p.add_column("UserName");
+        p.add_column("UserIdentity");
+        p.add_column(MESSAGE);
 
-        p.add_alternate_column("AppName", "ApplicationName".to_string());
-        p.add_alternate_column("Http.RequestId", "Owin.Request.Id".to_string());
-        p.add_alternate_column("Http.RequestQueryString", "Owin.Request.QueryString".to_string());
-        p.add_alternate_column("Http.Request.Path", "Owin.Request.Path".to_string());
+        p.add_alternate_column("AppName", "ApplicationName");
+        p.add_alternate_column("Http.RequestId", "Owin.Request.Id");
+        p.add_alternate_column("Http.RequestQueryString", "Owin.Request.QueryString");
+        p.add_alternate_column("Http.Request.Path", "Owin.Request.Path");
 
         p
     }
@@ -115,6 +124,7 @@ impl Default for Profile {
 /// from the `~/.lpf.json` configuration file.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProfileSet {
+    #[serde(flatten)]
     profiles: HashMap<String, Profile>
 }
 
@@ -164,14 +174,14 @@ mod vec_tests {
     #[test]
     pub fn vec_add_column_for_column_not_present() {
         let mut columns = vec!["alpha".to_string()];
-        vec_add_entry("beta".to_string(), &mut columns);
+        vec_add_entry("beta", &mut columns);
         assert_eq!(columns, vec!["alpha".to_string(), "beta".to_string()]);
     }
 
     #[test]
     pub fn vec_add_column_for_column_present() {
         let mut columns = vec!["alpha".to_string()];
-        vec_add_entry("alpha".to_string(), &mut columns);
+        vec_add_entry("alpha", &mut columns);
         assert_eq!(columns, vec!["alpha".to_string()]);
     }
 }
@@ -183,37 +193,37 @@ mod configuration_tests {
     #[test]
     pub fn has_column_for_matching_column() {
         let mut p = Profile::blank();
-        p.add_column("alpha".to_string());
+        p.add_column("alpha");
         assert!(p.has_column("alpha"));
     }
 
     #[test]
     pub fn has_column_for_matching_alternate_column() {
         let mut p = Profile::blank();
-        p.alternate_column_names.insert("alpha".to_string(), vec!["beta".to_string()]);
+        p.add_alternate_column("alpha", "beta");
         assert!(p.has_column("beta"));
     }
 
     #[test]
     pub fn add_column_for_column_that_exists() {
         let mut p = Profile::blank();
-        p.add_column("alpha".to_string());
-        p.add_column("alpha".to_string());
+        p.add_column("alpha");
+        p.add_column("alpha");
         assert_eq!(p.columns, vec!["alpha".to_string()]);
     }
 
     #[test]
     pub fn add_column_for_column_that_does_not_exist() {
         let mut p = Profile::blank();
-        p.add_column("alpha".to_string());
-        p.add_column("beta".to_string());
+        p.add_column("alpha");
+        p.add_column("beta");
         assert_eq!(p.columns, vec!["alpha".to_string(), "beta".to_string()]);
     }
 
     #[test]
     pub fn add_alternate_column_for_key_not_present_adds() {
         let mut p = Profile::blank();
-        p.add_alternate_column("main", "alpha".to_string());
+        p.add_alternate_column("main", "alpha");
         assert_eq!(p.alternate_column_names.len(), 1);
         assert_eq!(p.alternate_column_names["main"], vec!["alpha".to_string()]);
     }
@@ -221,8 +231,8 @@ mod configuration_tests {
     #[test]
     pub fn add_alternate_column_for_key_present_and_column_not_present_adds() {
         let mut p = Profile::blank();
-        p.add_alternate_column("main", "alpha".to_string());
-        p.add_alternate_column("main", "beta".to_string());
+        p.add_alternate_column("main", "alpha");
+        p.add_alternate_column("main", "beta");
         assert_eq!(p.alternate_column_names.len(), 1);
         assert_eq!(p.alternate_column_names["main"], vec!["alpha".to_string(), "beta".to_string()]);
     }
@@ -230,8 +240,8 @@ mod configuration_tests {
     #[test]
     pub fn add_alternate_column_for_key_present_and_column_present_does_not_add() {
         let mut p = Profile::blank();
-        p.add_alternate_column("main", "alpha".to_string());
-        p.add_alternate_column("main", "alpha".to_string());
+        p.add_alternate_column("main", "alpha");
+        p.add_alternate_column("main", "alpha");
         assert_eq!(p.alternate_column_names.len(), 1);
         assert_eq!(p.alternate_column_names["main"], vec!["alpha".to_string()]);
     }

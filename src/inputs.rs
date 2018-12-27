@@ -95,7 +95,7 @@ impl Inputs {
             }
 
             let regex = match config.output_file_spec.column_extractors.get(column) {
-                Some(custom_pattern) => regexes::make_regex_for_pattern(custom_pattern),
+                Some(custom_pattern) => regexes::make_case_insensitive_regex_for_pattern(custom_pattern),
                 None                 => regexes::make_regex_for_column(column),
             };
             
