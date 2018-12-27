@@ -8,7 +8,7 @@ use std::borrow::Cow;
 /// The set of possible log level emitted by the Fundamentals logging framework.
 /// They are ordered by frequency of occurence, as this should give a (very small!)
 /// performance boost when checking for them.
-pub const LOG_LEVELS: [&'static str; 9] = 
+pub const LOG_LEVELS: [&'static str; 9] =
 [
     "[INFO_]",
     "[DEBUG]",
@@ -55,6 +55,11 @@ pub fn inc(chars: &[(usize, char)], mut index: usize) -> Option<usize> {
     }
 }
 
+/// Makes a string safe for CSV by replacing \r and \n with spaces.
+pub fn safe_string(value: &str) -> String {
+    value.replace(|c| c == '\r' || c == '\n', " ")
+}
+
 /// A convenience function for slicing into the original line, which ensures that we do
 /// it correctly - start and end are indices into the chars[] array, NOT the line.
 /// We get the actual bounds from the .0 element of the chars tuples.
@@ -72,8 +77,7 @@ pub fn unchecked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize,
 pub fn checked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, end: usize) -> Cow<'t, str> {
     let slice = unchecked_slice(line, chars, start, end);
     if slice.contains(|c| c == '\r' || c == '\n') {
-        let safe_string = slice.replace(|c| c == '\r' || c == '\n', " ");
-        Cow::Owned(safe_string)
+        Cow::Owned(safe_string(slice))
     } else {
         Cow::Borrowed(slice)
     }

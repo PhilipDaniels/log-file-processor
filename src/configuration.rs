@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use regex::{Regex};
 use crate::arguments::Arguments;
 use crate::profiles::{Profile, ProfileSet, vec_add_entry};
-use crate::regexes::make_case_insensitive_regex_for_pattern;
+use crate::regexes::{make_case_insensitive_regex_for_pattern, make_kvp_pattern};
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const DEFAULT_MAX_MESSAGE_LENGTH: usize = 1000000;
@@ -17,7 +17,7 @@ pub struct Configuration {
     pub columns: Vec<String>,
 
     /// A sparse map specifying alternate names for a column. The nominal column name
-    /// is the key of the HashMap, it is this column name which should appear in the 
+    /// is the key of the HashMap, it is this column name which should appear in the
     /// columns collection. If a value for a column cannot be found under its preferred
     /// name, then the vector is checked for any alternate names and a lookup is
     /// attempted for them. This allows for instance, a column called "AppName" to locate
@@ -45,8 +45,20 @@ impl From<Profile> for Configuration {
             column_regexes: HashMap::new(),
         };
 
+        // Insert any custom regexes.
         for (column_name, pattern) in p.column_regexes {
             config.add_column_regex(column_name, &pattern);
+        }
+
+        // For all columns that don't have a custom regex, use a standard KVP one.
+        // We need a separate regex for each column because the name of the column
+        // is included in the regex pattern.
+        let cols = config.columns.clone();
+        for column in cols {
+            if !config.column_regexes.contains_key(&column) {
+                let pattern = make_kvp_pattern(&column);
+                config.add_column_regex(column, &pattern);
+            }
         }
 
         config
@@ -104,7 +116,7 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
         if let Some(quiet) = override_profile.quiet {
             config.quiet = quiet;
         }
-        
+
         for column_name in &override_profile.columns {
             config.add_column(column_name.clone());
         }
@@ -153,7 +165,7 @@ mod get_config_tests {
         let p = make_override_profile();
         profiles.insert(p);
         profiles
-    } 
+    }
 
     fn make_override_profile() -> Profile {
         let mut profile = Profile::blank();
@@ -233,7 +245,7 @@ mod get_config_tests {
         args.profile = "over".to_string();
 
         let config = get_config(&profiles, &args);
-        
+
         assert!(config.columns.contains(&"col1".to_string()));
         assert!(config.columns.contains(&"col2".to_string()));
         has_default_columns(&config.columns);
@@ -246,7 +258,7 @@ mod get_config_tests {
         args.profile = "over".to_string();
 
         let config = get_config(&profiles, &args);
-        
+
         assert!(config.alternate_column_names["PID"].contains(&"ProcessId".to_string()));
         assert!(config.alternate_column_names["PID"].contains(&"ProcId".to_string()));
         assert!(config.alternate_column_names["TID"].contains(&"ThreadId".to_string()));
@@ -259,7 +271,7 @@ mod get_config_tests {
         args.profile = "over".to_string();
 
         let config = get_config(&profiles, &args);
-        
+
         assert_eq!(config.file_patterns, vec!["case*.log"]);
     }
 
@@ -275,7 +287,7 @@ mod get_config_tests {
         args.files.clear();
 
         let config = get_config(&profiles, &args);
-        
+
         assert_eq!(config.file_patterns, vec!["*.log"]);
     }
 }

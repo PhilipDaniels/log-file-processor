@@ -1,14 +1,23 @@
 use regex::{Regex, RegexBuilder};
 use crate::inputs::is_date_column;
 
+pub fn make_case_insensitive_regex_for_pattern(pattern: &str) -> Regex {
+    RegexBuilder::new(pattern).case_insensitive(true).build().unwrap()
+}
+
 /// Makes a regex that extracts key-value pairs of the form
-///    Key=Value                            or
+///    Key=Value
+///    or
 ///    Key="Some value in double quotes"
 pub fn make_kvp_pattern(key_name: &str) -> String {
-    // or re = Regex::new(r"'([^']+)'\s+\((\d{4})\)").unwrap();
     format!(r###"\W{0}="(.*?)"|\W{0}=(\S*)"###, regex::escape(key_name))
 }
 
+
+
+
+
+/*
 /// Makes a regex similar to `make_kvp_pattern`, but that allows an alternate name
 /// for the key.
 pub fn make_kvp_pattern_with_alternate_key(key_name: &str, alternate_key_name: &str) -> String {
@@ -41,7 +50,4 @@ pub fn make_regex_for_column(column_name: &str) -> Regex {
         RegexBuilder::new(&make_kvp_pattern(column_name))
     }.case_insensitive(true).build().unwrap()
 }
-
-pub fn make_case_insensitive_regex_for_pattern(pattern: &str) -> Regex {
-    RegexBuilder::new(pattern).case_insensitive(true).build().unwrap()
-}
+*/

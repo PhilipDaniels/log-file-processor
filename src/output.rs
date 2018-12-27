@@ -7,7 +7,7 @@ use regex::{Captures};
 
 pub fn make_output_record<'p>(config: &Configuration, parsed_line: &'p ParsedLine) -> Vec<String> {
     let mut data = Vec::new();
-    
+
     for column in &config.columns {
         match column.as_str() {
             parse_utils::LOG_DATE => data.push(parsed_line.log_date.to_string()),
@@ -35,17 +35,21 @@ fn get_column(config: &Configuration, parsed_line: &ParsedLine, column: &str) ->
         }
     }
 
-    try_extract_from_message(config, parsed_line, &column)
+    try_extract_from_message(config, parsed_line, column)
 }
 
 /// Look for a column (as a KVP in the message). It may be embedded somewhere in the middle
 /// of the message. All columns have associated regexes pre-calculated, even standard KVP ones.
 fn try_extract_from_message<'p>(config: &Configuration, parsed_line: &'p ParsedLine, column: &str) -> String {
-    // let captures = column.regex.captures(parsed_line.line);
-    // if captures.is_none() {
-    //     return "".to_string();
-    // }
-    // let captures = captures.unwrap();
+    if let Some(regex) = config.column_regexes.get(column) {
+        if let Some(captures) = regex.captures(parsed_line.line) {
+            let value = extract_kvp_value(captures);
+            let value = parse_utils::safe_string(value);
+            return value.trim().to_string();
+        }
+    }
+
+    "".to_string()
 
     // let mut text = if is_date_column(&column.name) {
     //     let capture_names = column.regex.capture_names().collect::<Vec<_>>();
@@ -53,11 +57,14 @@ fn try_extract_from_message<'p>(config: &Configuration, parsed_line: &'p ParsedL
     // } else {
     //     extract_kvp(captures).to_string()
     // };
+}
 
-    // text = text.replace(|c| c == '\r' || c == '\n', " ");
-    // text.trim().to_string()
-
-    "".to_string()
+fn extract_kvp_value<'t>(captures: Captures<'t>) -> &'t str {
+    let first_valid_sub_match = captures.iter().skip(1).skip_while(|c| c.is_none()).nth(0).unwrap();
+    match first_valid_sub_match {
+        Some(m) => return m.as_str(),
+        None => return ""
+    }
 }
 
 fn extract_date(captures: Captures, capture_names: &[Option<&str>]) -> String {
@@ -120,14 +127,6 @@ fn extract_date_part<'t>(part: &str, captures: &'t Captures, capture_names: &[Op
     }
 
     ""
-}
-
-fn extract_kvp<'t>(captures: Captures<'t>) -> &'t str {
-    let first_valid_sub_match = captures.iter().skip(1).skip_while(|c| c.is_none()).nth(0).unwrap();
-    match first_valid_sub_match {
-        Some(m) => return m.as_str(),
-        None => return ""
-    }
 }
 
 /*
