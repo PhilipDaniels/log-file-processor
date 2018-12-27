@@ -20,7 +20,7 @@ mod parsed_line;
 mod profiles;
 mod regexes;
 use crate::arguments::Arguments;
-use crate::profiles::Options;
+use crate::profiles::ProfileSet;
 use crate::configuration::{get_config};
 use crate::inputs::{Inputs, InputFile, Column};
 use crate::parsed_line::ParsedLine;
@@ -51,7 +51,7 @@ fn main() -> Result<(), io::Error> {
     println!("Args = {:#?}", args);
 
     if args.dump_config {
-        let options = Options::default();
+        let options = ProfileSet::default();
         let json = serde_json::to_string_pretty(&options)?;
         println!("{}", json);
         return Ok(());
@@ -62,13 +62,13 @@ fn main() -> Result<(), io::Error> {
             path.push(".lpf.json");
             match File::open(path) {
                 Ok(f) => serde_json::from_reader(f)?,
-                Err(ref e) if e.kind() == io::ErrorKind::NotFound => Options::default(),
+                Err(ref e) if e.kind() == io::ErrorKind::NotFound => ProfileSet::default(),
                 Err(e) => panic!("Error opening ~/.lpf.json: {:?}", e)
             }
         },
         None => {
             eprintln!("Cannot locate home directory, using default configuration.");
-            Options::default()
+            ProfileSet::default()
         } 
     };
 

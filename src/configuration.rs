@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use crate::arguments::Arguments;
-use crate::profiles::{Configuration, Options};
+use crate::profiles::{Profile, ProfileSet, vec_add_entry};
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const DEFAULT_MAX_MESSAGE_LENGTH: usize = 1000000;
 
 #[derive(Debug)]
-pub struct Configuration2 {
-    /// The name of the profile.
+pub struct Configuration {
     pub name: String,
     pub quiet: bool,
     pub max_message_length: usize,
@@ -32,27 +31,59 @@ pub struct Configuration2 {
     pub column_regexes: HashMap<String, String>,
 }
 
+impl From<Profile> for Configuration {
+    fn from(p: Profile) -> Self {
+        Configuration {
+            name: p.name,
+            quiet: p.quiet.unwrap_or(false),
+            max_message_length: p.max_message_length.unwrap_or(DEFAULT_MAX_MESSAGE_LENGTH),
+            columns: p.columns,
+            alternate_column_names: p.alternate_column_names,
+            file_patterns: p.file_patterns,
+            column_regexes: p.column_regexes
+        }
+    }
+}
+
+impl Configuration {
+    pub fn add_column(&mut self, column_name: String) {
+        vec_add_entry(column_name, &mut self.columns);
+    }
+
+    pub fn add_alternate_column(&mut self, main_column_name: &str, alternate_column_name: String) {
+        let alternate_names = self.alternate_column_names.entry(main_column_name.to_string()).or_default();
+        vec_add_entry(alternate_column_name, alternate_names);
+    }
+
+    pub fn add_file_pattern(&mut self, file_pattern: String) {
+        vec_add_entry(file_pattern, &mut self.file_patterns);
+    }
+}
 
 /// Represents the final configuration, being a combination of
-///    the options (as loaded from file)
+///    the profiles (as loaded from file)
 ///    to which the arguments have been applied
 ///    then the appropriate inputs constructed.
-pub fn get_config(options: &Options, args: &Arguments) -> Configuration {
-    // Determine the baseline configuration to which we will apply any overrides.
+pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
+    // Determine the baseline profile to which we will apply any overrides.
     // If there is a profile named "default" in the .lpf.json file we use it - this allows
     // the user to customize the default profile - otherwise we just generate one in code.
-    let mut config = match args.no_default_profile {
-        true => Configuration::blank(),
-        false => options.configs.get(DEFAULT_PROFILE_NAME).map_or(Configuration::default(), |p| p.clone())
+    let profile = match args.no_default_profile {
+        true => Profile::blank(),
+        false => profiles.get(DEFAULT_PROFILE_NAME).map_or(Profile::default(), |p| p.clone())
     };
 
+    let mut config = Configuration::from(profile);
+
     if args.profile != DEFAULT_PROFILE_NAME {
-        let override_profile = options.configs.get(&args.profile)
+        let override_profile = profiles.get(&args.profile)
             .expect(&format!("Profile '{}' does not exist", args.profile));
 
         config.name = override_profile.name.clone();
-        config.quiet = override_profile.quiet;
-
+        if let Some(quiet) = override_profile.quiet {
+            config.quiet = quiet;
+        }
+        
         for column_name in &override_profile.columns {
             config.add_column(column_name.clone());
         }
@@ -92,29 +123,29 @@ pub fn get_config(options: &Options, args: &Arguments) -> Configuration {
 mod get_config_tests {
     use super::*;
 
-    fn make_options_with_override() -> Options {
-        let mut options = Options::default();
-        let mut p = make_override_configuration();
-        options.configs.insert(p.name.clone(), p);
-        options
+    fn make_profiles_with_override() -> ProfileSet {
+        let mut profiles = ProfileSet::default();
+        let p = make_override_profile();
+        profiles.insert(p);
+        profiles
     } 
 
-    fn make_override_configuration() -> Configuration {
-        let mut config = Configuration::blank();
-        config.name = "over".to_string();
-        config.quiet = true;
-        config.add_column("col1".to_string());
-        config.add_column("col2".to_string());
-        config.add_alternate_column("PID", "ProcessId".to_string());
-        config.add_alternate_column("PID", "ProcId".to_string());
-        config.add_alternate_column("TID", "ThreadId".to_string());
-        config.add_file_pattern("case*.log".to_string());
-        config
+    fn make_override_profile() -> Profile {
+        let mut profile = Profile::blank();
+        profile.name = "over".to_string();
+        profile.quiet = Some(true);
+        profile.add_column("col1".to_string());
+        profile.add_column("col2".to_string());
+        profile.add_alternate_column("PID", "ProcessId".to_string());
+        profile.add_alternate_column("PID", "ProcId".to_string());
+        profile.add_alternate_column("TID", "ThreadId".to_string());
+        profile.add_file_pattern("case*.log".to_string());
+        profile
     }
 
     /// Checks that all the default columns are in a column collection.
     fn has_default_columns(columns: &[String]) {
-        let def = Configuration::default();
+        let def = Profile::default();
         for col in &def.columns {
             assert!(columns.contains(col));
         }
@@ -122,61 +153,61 @@ mod get_config_tests {
 
     #[test]
     pub fn sets_command_line_arguments_quiet_correctly() {
-        let options = Options::default();
+        let profiles = ProfileSet::default();
         let mut args = Arguments::default();
 
         args.quiet = Some(true);
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         assert!(config.quiet);
 
         args.quiet = Some(false);
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         assert!(!config.quiet);
     }
 
     #[test]
     pub fn sets_command_line_arguments_max_message_length_correctly() {
-        let options = Options::default();
+        let profiles = ProfileSet::default();
         let mut args = Arguments::default();
 
         args.max_message_length = Some(20);
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         assert_eq!(config.max_message_length, 20);
 
         args.max_message_length = None;
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         assert_eq!(config.max_message_length, DEFAULT_MAX_MESSAGE_LENGTH);
     }
 
     #[test]
     pub fn for_no_default_profile_returns_blank() {
-        let options = Options::default();
+        let profiles = ProfileSet::default();
         let mut args = Arguments::default();
         args.no_default_profile = true;
 
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         assert_eq!(config.name, "blank");
         assert!(config.columns.is_empty());
     }
 
     #[test]
     pub fn override_profile_name_and_quiet_are_set_correctly() {
-        let options = make_options_with_override();
+        let profiles = make_profiles_with_override();
         let mut args = Arguments::default();
         args.profile = "over".to_string();
 
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         assert_eq!(config.name, "over");
         assert_eq!(config.quiet, true);
     }
 
     #[test]
     pub fn override_profile_adds_columns() {
-        let options = make_options_with_override();
+        let profiles = make_profiles_with_override();
         let mut args = Arguments::default();
         args.profile = "over".to_string();
 
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         
         assert!(config.columns.contains(&"col1".to_string()));
         assert!(config.columns.contains(&"col2".to_string()));
@@ -185,11 +216,11 @@ mod get_config_tests {
 
     #[test]
     pub fn override_profile_adds_alternate_columns() {
-        let options = make_options_with_override();
+        let profiles = make_profiles_with_override();
         let mut args = Arguments::default();
         args.profile = "over".to_string();
 
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         
         assert!(config.alternate_column_names["PID"].contains(&"ProcessId".to_string()));
         assert!(config.alternate_column_names["PID"].contains(&"ProcId".to_string()));
@@ -198,27 +229,27 @@ mod get_config_tests {
 
     #[test]
     pub fn override_profile_adds_file_patterns() {
-        let options = make_options_with_override();
+        let profiles = make_profiles_with_override();
         let mut args = Arguments::default();
         args.profile = "over".to_string();
 
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         
         assert_eq!(config.file_patterns, vec!["case*.log"]);
     }
 
     #[test]
     pub fn for_no_file_patterns_in_args_or_config_adds_default() {
-        let mut p = make_override_configuration();
+        let mut p = make_override_profile();
         p.file_patterns.clear();
-        let mut options = Options::default();
-        options.configs.insert(p.name.clone(), p);
+        let mut profiles = ProfileSet::default();
+        profiles.insert(p);
 
         let mut args = Arguments::default();
         args.profile = "over".to_string();
         args.files.clear();
 
-        let config = get_config(&options, &args);
+        let config = get_config(&profiles, &args);
         
         assert_eq!(config.file_patterns, vec!["*.log"]);
     }

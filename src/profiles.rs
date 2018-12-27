@@ -3,18 +3,15 @@ use serde_derive::{Serialize, Deserialize};
 use crate::configuration::{DEFAULT_PROFILE_NAME, DEFAULT_MAX_MESSAGE_LENGTH};
 use crate::parse_utils::{LOG_DATE, LOG_LEVEL, MESSAGE};
 
-/// Represents profiles as defined in the configuration file.
+/// Represents a profile as defined in the configuration file.
 /// The main difference between this and the final configuration is that
 /// virtually everything is optional, allowing an "override the defaults"
 /// configuration system.
-
-/// Represents a complete set of configuration options.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Configuration {
-    /// The name of the profile.
+pub struct Profile {
     pub name: String,
-    pub quiet: bool,
-    pub max_message_length: usize,
+    pub quiet: Option<bool>,
+    pub max_message_length: Option<usize>,
 
     /// A simple list of column names, these will become the headers in the output file.
     pub columns: Vec<String>,
@@ -40,18 +37,18 @@ fn vec_has_entry(column_name: &str, vec: &Vec<String>) -> bool {
     vec.iter().any(|c| c.eq_ignore_ascii_case(column_name))
 }
 
-fn vec_add_entry(column_name: String, vec: &mut Vec<String>) {
+pub fn vec_add_entry(column_name: String, vec: &mut Vec<String>) {
     if !vec_has_entry(&column_name, vec) {
         vec.push(column_name);
     }
 }
 
-impl Configuration {
+impl Profile {
     pub fn blank() -> Self {
-        Configuration {
+        Profile {
             name: "blank".to_string(),
-            quiet: false,
-            max_message_length: DEFAULT_MAX_MESSAGE_LENGTH,
+            quiet: None,
+            max_message_length: None,
             columns: Vec::new(),
             alternate_column_names: HashMap::new(),
             file_patterns: Vec::new(),
@@ -59,6 +56,7 @@ impl Configuration {
         }
     }
 
+    #[cfg(test)]
     pub fn has_column(&self, column_name: &str) -> bool {
         vec_has_entry(column_name, &self.columns) ||
             self.alternate_column_names.values().any(|acns| vec_has_entry(column_name, acns))
@@ -73,15 +71,18 @@ impl Configuration {
         vec_add_entry(alternate_column_name, alternate_names);
     }
 
+    #[cfg(test)]
     pub fn add_file_pattern(&mut self, file_pattern: String) {
         vec_add_entry(file_pattern, &mut self.file_patterns);
     }
 }
 
-impl Default for Configuration {
+impl Default for Profile {
     fn default() -> Self {
         let mut p = Self::blank();
         p.name = DEFAULT_PROFILE_NAME.to_string();
+        p.quiet = Some(false);
+        p.max_message_length = Some(DEFAULT_MAX_MESSAGE_LENGTH);
 
         p.add_column(LOG_DATE.to_string());
         p.add_column(LOG_LEVEL.to_string());
@@ -110,22 +111,31 @@ impl Default for Configuration {
     }
 }
 
-/// The `Options` is just a hash-map of Configuration structs as loaded
+/// The `ProfileSet` is just a hash-map of Profile structs as loaded
 /// from the `~/.lpf.json` configuration file.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Options {
-    pub configs: HashMap<String, Configuration>
+pub struct ProfileSet {
+    profiles: HashMap<String, Profile>
 }
 
-impl Default for Options {
+impl Default for ProfileSet {
     fn default() -> Self {
-        let mut options = Options {
-            configs: HashMap::new(),
+        let mut profiles = ProfileSet {
+            profiles: HashMap::new(),
         };
-        let p = Configuration::default();
-        options.configs.insert(p.name.clone(), p);
 
-        options
+        profiles.insert(Profile::default());
+        profiles
+    }
+}
+
+impl ProfileSet {
+    pub fn insert(&mut self, profile: Profile) {
+        self.profiles.insert(profile.name.clone(), profile);
+    }
+
+    pub fn get(&self, profile_name: &str) -> Option<&Profile> {
+        self.profiles.get(profile_name)
     }
 }
 
@@ -172,21 +182,21 @@ mod configuration_tests {
 
     #[test]
     pub fn has_column_for_matching_column() {
-        let mut p = Configuration::blank();
+        let mut p = Profile::blank();
         p.add_column("alpha".to_string());
         assert!(p.has_column("alpha"));
     }
 
     #[test]
     pub fn has_column_for_matching_alternate_column() {
-        let mut p = Configuration::blank();
+        let mut p = Profile::blank();
         p.alternate_column_names.insert("alpha".to_string(), vec!["beta".to_string()]);
         assert!(p.has_column("beta"));
     }
 
     #[test]
     pub fn add_column_for_column_that_exists() {
-        let mut p = Configuration::blank();
+        let mut p = Profile::blank();
         p.add_column("alpha".to_string());
         p.add_column("alpha".to_string());
         assert_eq!(p.columns, vec!["alpha".to_string()]);
@@ -194,7 +204,7 @@ mod configuration_tests {
 
     #[test]
     pub fn add_column_for_column_that_does_not_exist() {
-        let mut p = Configuration::blank();
+        let mut p = Profile::blank();
         p.add_column("alpha".to_string());
         p.add_column("beta".to_string());
         assert_eq!(p.columns, vec!["alpha".to_string(), "beta".to_string()]);
@@ -202,7 +212,7 @@ mod configuration_tests {
 
     #[test]
     pub fn add_alternate_column_for_key_not_present_adds() {
-        let mut p = Configuration::blank();
+        let mut p = Profile::blank();
         p.add_alternate_column("main", "alpha".to_string());
         assert_eq!(p.alternate_column_names.len(), 1);
         assert_eq!(p.alternate_column_names["main"], vec!["alpha".to_string()]);
@@ -210,7 +220,7 @@ mod configuration_tests {
 
     #[test]
     pub fn add_alternate_column_for_key_present_and_column_not_present_adds() {
-        let mut p = Configuration::blank();
+        let mut p = Profile::blank();
         p.add_alternate_column("main", "alpha".to_string());
         p.add_alternate_column("main", "beta".to_string());
         assert_eq!(p.alternate_column_names.len(), 1);
@@ -219,7 +229,7 @@ mod configuration_tests {
 
     #[test]
     pub fn add_alternate_column_for_key_present_and_column_present_does_not_add() {
-        let mut p = Configuration::blank();
+        let mut p = Profile::blank();
         p.add_alternate_column("main", "alpha".to_string());
         p.add_alternate_column("main", "alpha".to_string());
         assert_eq!(p.alternate_column_names.len(), 1);
