@@ -2,15 +2,14 @@ use std::fs::File;
 use std::io::{BufReader};
 use std::time::Instant;
 use std::thread;
-use std::env;
 use std::io;
+use std::sync::{Arc};
 use csv::{Writer, WriterBuilder};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, HumanBytes, HumanDuration};
 use structopt::StructOpt;
 
 mod arguments;
 mod fast_logfile_iterator;
-mod config;
 mod configuration;
 mod inputs;
 mod kvps;
@@ -20,10 +19,11 @@ mod parsed_line;
 mod profiles;
 mod regexes;
 use crate::arguments::Arguments;
+use crate::fast_logfile_iterator::FastLogFileIterator;
 use crate::profiles::ProfileSet;
-use crate::configuration::{get_config};
-use crate::inputs::{Inputs, InputFile, Column};
+use crate::configuration::{get_config, Configuration};
 use crate::parsed_line::ParsedLine;
+use crate::inputs::{Inputs, InputFile};
 
 /* TODOs
 =============================================================================
@@ -73,52 +73,40 @@ fn main() -> Result<(), io::Error> {
     };
 
     let configuration = get_config(&profiles, &args);
+    let inputs = Inputs::new_from_config(&configuration);
+
+    if inputs.is_empty() {
+        eprintln!("No input to process.");
+        return Ok(());
+    }
+
     //println!("profiles = {:#?}", profiles);
     //println!("configuration = {:#?}", configuration);
 
+    let start_time = Instant::now();
+
+    // TODO: What we would really like is to have N threads AT MOST processing at 
+    // any one time. Say, N = 4, for example. Then we create new threads as existing
+    // ones complete. Rayon would set N for us, but I can't get it to work with
+    // the MultiProgress bar.
+    let mp = MultiProgress::new();
+    let longest_len = inputs.longest_input_name_len();
+    let total_bytes = inputs.total_bytes() as u64;
+    let input_count = inputs.len();
+
+    let configuration = Arc::new(configuration);
+    for input_file in inputs.files {
+        let pb = make_progress_bar(longest_len, &mp, &input_file);
+        let conf = Arc::clone(&configuration);
+        let _ = thread::spawn(move || { process_log_file(conf, input_file, pb); });
+    }
+
+    mp.join().unwrap();
+    let elapsed = start_time.elapsed();
+    println!("Processed {} in {} files in {}.{:03} seconds",
+        HumanBytes(total_bytes), input_count,
+        elapsed.as_secs(), elapsed.subsec_millis());
     Ok(())
-
-    // let mut config = Config::default();
-
-    // // Temp code: allow a set of files on the command line to override the default.
-    // let args: Vec<_> = env::args().collect();
-    // if args.len() > 1 {
-    //     config.input_file_specs.clear();
-    //     config.input_file_specs.extend(args[1..].iter().map(|arg| arg.to_string()));
-    // }
-    // let inputs = Inputs::new_from_config(&config);
-
-    // if inputs.is_empty() {
-    //     eprintln!("No input to process.");
-    //     return;
-    // }
-
-    // let start_time = Instant::now();
-
-    // // TODO: What we would really like is to have N threads AT MOST processing at 
-    // // any one time. Say, N = 4, for example. Then we create new threads as existing
-    // // ones complete. Rayon would set N for us, but I can't get it to work with
-    // // the MultiProgress bar.
-    // let mp = MultiProgress::new();
-
-    // let longest_len = inputs.longest_input_name_len();
-    // for input_file in &inputs.input_files {
-    //     let input_file = input_file.clone();
-    //     let pb = make_progress_bar(longest_len, &mp, &input_file);
-    //     let columns = inputs.columns.clone();
-    //     let _ = thread::spawn(move || {
-    //         process_log_file(pb, input_file, &columns);
-    //     });
-    // }
-
-    // mp.join().unwrap();
-
-    // let total_bytes = inputs.input_files.iter().map(|f| f.length as u64).sum();
-    // println!("Processed {} in {} files in {}",
-    //     HumanBytes(total_bytes),
-    //     inputs.input_files.len(),
-    //     HumanDuration(start_time.elapsed()));
-
 }
 
 fn make_progress_bar(longest_filename_length: usize, mp: &MultiProgress, input_file: &InputFile) -> ProgressBar {
@@ -149,7 +137,7 @@ fn make_progress_bar_style(bar_style: BarStyle) -> ProgressStyle {
     ).progress_chars("█▉▊▋▌▍▎▏  ")
 }
 
-fn process_log_file(pb: ProgressBar, input_file: InputFile, columns: &[Column]) {
+fn process_log_file(config: Arc<Configuration>, input_file: InputFile, pb: ProgressBar) {
     let start_time = Instant::now();
 
     let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
@@ -160,11 +148,11 @@ fn process_log_file(pb: ProgressBar, input_file: InputFile, columns: &[Column]) 
         .from_path(&input_file.output_path)
         .expect(&format!("Could not open output file {}", &input_file.output_path));
 
-    writer.write_record(columns.iter().map(|c| &c.name)).expect("Can write headings");
+    writer.write_record(config.columns.iter()).expect("Can write headings");
 
     let mut bytes_read_so_far = 0;
-    for (bytes_read, log_line) in fast_logfile_iterator::FastLogFileIterator::new(reader) {
-        process_line(columns, log_line, &mut writer);
+    for (bytes_read, log_line) in FastLogFileIterator::new(reader) {
+        process_line(&config, log_line, &mut writer);
         bytes_read_so_far += bytes_read;
         pb.inc(bytes_read);
         let msg = format!("{} / {}", HumanBytes(bytes_read_so_far), HumanBytes(input_file.length as u64));
@@ -175,7 +163,7 @@ fn process_log_file(pb: ProgressBar, input_file: InputFile, columns: &[Column]) 
     pb.finish_with_message(&format!("Done - {} in {}", HumanBytes(bytes_read_so_far), HumanDuration(start_time.elapsed())));
 }
 
-fn process_line(columns: &[Column], line: String,  writer: &mut Writer<File>) {
+fn process_line(config: &Configuration, line: String,  writer: &mut Writer<File>) {
     let parsed_line = ParsedLine::new(&line);
 
     if parsed_line.is_err() {
@@ -185,7 +173,6 @@ fn process_line(columns: &[Column], line: String,  writer: &mut Writer<File>) {
     }
 
     let parsed_line = parsed_line.unwrap();
-    let data = output::make_output_record(&parsed_line, columns);
-
+    let data = output::make_output_record(config, &parsed_line);
     writer.write_record(&data).expect("Writing a CSV record should always succeed.");
 }

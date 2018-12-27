@@ -1,5 +1,4 @@
 use structopt::StructOpt;
-use crate::configuration::DEFAULT_PROFILE_NAME;
 
 /// Represents command-line arguments.
 #[derive(StructOpt, Debug)] 
@@ -40,6 +39,8 @@ pub struct Arguments {
 #[cfg(test)]
 impl Default for Arguments {
     fn default() -> Self {
+        use crate::configuration::DEFAULT_PROFILE_NAME;
+
         Arguments {
             profile: DEFAULT_PROFILE_NAME.to_string(),
             no_default_profile: false,

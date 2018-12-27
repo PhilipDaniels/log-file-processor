@@ -1,51 +1,63 @@
 /// This module is responsible for preparing an output record from a ParsedLine.
-
-use crate::config::{self, Config};
-use crate::inputs::{Column, is_date_column};
+use crate::configuration::Configuration;
+use crate::inputs::{is_date_column};
 use crate::parsed_line::ParsedLine;
 use crate::parse_utils;
 use regex::{Captures};
 
-pub fn make_output_record<'p>(parsed_line: &'p ParsedLine, columns: &'p [Column]) -> Vec<String> {
+pub fn make_output_record<'p>(config: &Configuration, parsed_line: &'p ParsedLine) -> Vec<String> {
     let mut data = Vec::new();
     
-    for column in columns {
-        match column.name.as_str() {
+    for column in &config.columns {
+        match column.as_str() {
             parse_utils::LOG_DATE => data.push(parsed_line.log_date.to_string()),
             parse_utils::LOG_LEVEL => data.push(parsed_line.log_level.to_string()),
             parse_utils::MESSAGE => data.push(parsed_line.message.to_string()),
-
-            _ => {
-                match parsed_line.kvps.get_value(&column.name) {
-                    Some(val) => data.push(val.to_string()),
-                    None => // TODO: Check for alternate names first. Then check for name and alternate names in the message.
-                     data.push(try_extract_from_message(parsed_line, &column)),
-                }
-            },
+            _ => data.push(get_column(config, parsed_line, &column)),
         }
     }
 
     data
 }
 
+fn get_column(config: &Configuration, parsed_line: &ParsedLine, column: &str) -> String {
+    // Check for the column under its main name.
+    if let Some(kvp) = parsed_line.kvps.get_value(&column) {
+        return kvp.to_string();
+    }
+
+    // Check for the column under any alternative names.
+    if let Some(alternate_names) = config.alternate_column_names.get(column) {
+        for alt_name in alternate_names {
+            if let Some(kvp) = parsed_line.kvps.get_value(&alt_name) {
+                return kvp.to_string();
+            }
+        }
+    }
+
+    try_extract_from_message(config, parsed_line, &column)
+}
+
 /// Look for a column (as a KVP in the message). It may be embedded somewhere in the middle
 /// of the message. All columns have associated regexes pre-calculated, even standard KVP ones.
-fn try_extract_from_message<'p>(parsed_line: &'p ParsedLine, column: &'p Column) -> String {
-    let captures = column.regex.captures(parsed_line.line);
-    if captures.is_none() {
-        return "".to_string();
-    }
-    let captures = captures.unwrap();
+fn try_extract_from_message<'p>(config: &Configuration, parsed_line: &'p ParsedLine, column: &str) -> String {
+    // let captures = column.regex.captures(parsed_line.line);
+    // if captures.is_none() {
+    //     return "".to_string();
+    // }
+    // let captures = captures.unwrap();
 
-    let mut text = if is_date_column(&column.name) {
-        let capture_names = column.regex.capture_names().collect::<Vec<_>>();
-        extract_date(captures, &capture_names)
-    } else {
-        extract_kvp(captures).to_string()
-    };
+    // let mut text = if is_date_column(&column.name) {
+    //     let capture_names = column.regex.capture_names().collect::<Vec<_>>();
+    //     extract_date(captures, &capture_names)
+    // } else {
+    //     extract_kvp(captures).to_string()
+    // };
 
-    text = text.replace(|c| c == '\r' || c == '\n', " ");
-    text.trim().to_string()
+    // text = text.replace(|c| c == '\r' || c == '\n', " ");
+    // text.trim().to_string()
+
+    "".to_string()
 }
 
 fn extract_date(captures: Captures, capture_names: &[Option<&str>]) -> String {
@@ -118,6 +130,7 @@ fn extract_kvp<'t>(captures: Captures<'t>) -> &'t str {
     }
 }
 
+/*
 #[cfg(test)]
 mod make_output_record_extract_kvp_from_message_tests {
     use super::*;
@@ -174,3 +187,4 @@ mod make_output_record_extract_kvp_from_message_tests {
         assert_eq!(data[0], "");
     }
 }
+*/
