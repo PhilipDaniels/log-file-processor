@@ -8,6 +8,7 @@ use csv::{Writer, WriterBuilder};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, HumanBytes, HumanDuration};
 use structopt::StructOpt;
 
+mod arguments;
 mod fast_logfile_iterator;
 mod config;
 mod configuration;
@@ -16,8 +17,11 @@ mod kvps;
 mod output;
 mod parse_utils;
 mod parsed_line;
+mod profiles;
 mod regexes;
-use crate::configuration::{Arguments, Options, get_config};
+use crate::arguments::Arguments;
+use crate::profiles::Options;
+use crate::configuration::{get_config};
 use crate::inputs::{Inputs, InputFile, Column};
 use crate::parsed_line::ParsedLine;
 
