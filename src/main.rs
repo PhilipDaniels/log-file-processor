@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{BufReader};
 use std::time::Instant;
 use std::thread;
-use std::io;
+use std::io::{self, Write};
 use std::sync::{Arc};
 use csv::{Writer, WriterBuilder};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, HumanBytes, HumanDuration};
@@ -140,10 +140,17 @@ fn process_log_file(config: Arc<Configuration>, input_file: InputFile, pb: Progr
     let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
     let reader = BufReader::new(input_file_handle);
 
+    // TODO: get parsed lines as a vector
+    // let parsed_lines = get_all_as_vec();
+    // let filtered_lines: vec = parsed_lines.iter().filter(|line| line.logdate > ...).collect();
+    // filtered_lines.sort();
+    // write out filtered_lines
+
+
+    // Write everything to an in-memory vector first.
     let mut writer = WriterBuilder::new()
         .flexible(true)
-        .from_path(&input_file.output_path)
-        .expect(&format!("Could not open output file {}", &input_file.output_path));
+        .from_writer(vec![]);
 
     writer.write_record(config.columns.iter()).expect("Can write headings");
 
@@ -156,11 +163,18 @@ fn process_log_file(config: Arc<Configuration>, input_file: InputFile, pb: Progr
         pb.set_message(&msg);
     }
 
+    // Now write everything out to file in one go.
+    let mut output_file_handle = File::create(&input_file.output_path)
+        .expect(&format!("Could not open output file {}", &input_file.output_path));
+    let vec = writer.into_inner().unwrap();
+    output_file_handle.write(&vec)
+        .expect(&format!("Could not write to output file {}", &input_file.output_path));
+
     pb.set_style(make_progress_bar_style(BarStyle::FileCompleted));
     pb.finish_with_message(&format!("Done - {} in {}", HumanBytes(bytes_read_so_far), HumanDuration(start_time.elapsed())));
 }
 
-fn process_line(config: &Configuration, line: String,  writer: &mut Writer<File>) {
+fn process_line(config: &Configuration, line: String,  writer: &mut Writer<Vec<u8>>) {
     let parsed_line = ParsedLine::new(&line);
 
     if parsed_line.is_err() {
