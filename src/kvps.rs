@@ -1,20 +1,19 @@
 /// This module contains the representation of a Key-Value pair as parsed from the original line,
 /// and some utility methods for doing that parsing.
 
-use std::borrow::Cow;
 use crate::parse_utils::*;
 
 /// A Vec is probably as fast as a HashMap for the small number of KVPs we expect to see.
 #[derive(Debug, Default)]
-pub struct KVPCollection<'t> {
-    kvps: Vec<KVPStrings<'t>>
+pub struct KVPCollection {
+    kvps: Vec<KVPStrings>
 }
 
-impl<'t> KVPCollection<'t> {
+impl KVPCollection {
     /// Insert a new KVP, but only if it does not already exist.
-    pub fn insert(&mut self, new_kvp: KVPStrings<'t>) {
+    pub fn insert(&mut self, new_kvp: KVPStrings) {
         for kvp in &self.kvps {
-            if kvp.key.eq_ignore_ascii_case(new_kvp.key) {
+            if kvp.key.eq_ignore_ascii_case(&new_kvp.key) {
                 return;
             }
         }
@@ -62,9 +61,9 @@ impl<'t> KVPCollection<'t> {
 /// The value may be an original slice, or it may be a String if it required
 /// cleanup, e.g. if the original value contained embedded newlines.
 #[derive(Debug, Default)]
-pub struct KVPStrings<'t> {
-    pub key: &'t str,
-    pub value: Cow<'t, str>
+pub struct KVPStrings {
+    pub key: String,
+    pub value: String
 }
 
 /// Represents a KVP as it is parsed out of a line. This is low-level information
@@ -88,7 +87,7 @@ impl KVPParseData {
         self.value_start_index > self.key_end_index && self.value_end_index >= self.value_start_index
     }
 
-    pub fn get_kvp_strings<'t>(&self, line: &'t str, chars: &[(usize, char)]) -> KVPStrings<'t> {
+    pub fn get_kvp_strings<'t>(&self, line: &'t str, chars: &[(usize, char)]) -> KVPStrings {
         let key = unchecked_slice(line, &chars, self.key_start_index, self.key_end_index);
         let value = if self.has_value() {
             checked_slice(line, &chars, self.value_start_index, self.value_end_index)
@@ -300,8 +299,8 @@ mod kvp_collection_tests {
     #[test]
     pub fn insert_does_not_add_if_strings_equal() {
         let mut sut = KVPCollection::default();
-        sut.insert(KVPStrings { key: "car", value: "ford".into() });
-        sut.insert(KVPStrings { key: "car", value: "volvo".into() });
+        sut.insert(KVPStrings { key: "car".to_string(), value: "ford".to_string() });
+        sut.insert(KVPStrings { key: "car".to_string(), value: "volvo".to_string() });
 
         assert_eq!(sut.len(), 1);
         assert_eq!(sut.value("car"), "ford");
@@ -310,8 +309,8 @@ mod kvp_collection_tests {
     #[test]
     pub fn insert_adds_if_strings_different() {
         let mut sut = KVPCollection::default();
-        sut.insert(KVPStrings { key: "car", value: "ford".into() });
-        sut.insert(KVPStrings { key: "truck", value: "volvo".into() });
+        sut.insert(KVPStrings { key: "car".to_string(), value: "ford".to_string() });
+        sut.insert(KVPStrings { key: "truck".to_string(), value: "volvo".to_string() });
 
         assert_eq!(sut.len(), 2);
         assert_eq!(sut.value("car"), "ford");
@@ -321,7 +320,7 @@ mod kvp_collection_tests {
     #[test]
     pub fn get_value_works_case_insensitively() {
         let mut sut = KVPCollection::default();
-        sut.insert(KVPStrings { key: "car", value: "ford".into() });
+        sut.insert(KVPStrings { key: "car".to_string(), value: "ford".to_string() });
 
         assert_eq!(sut.len(), 1);
         assert_eq!(sut.value("car"), "ford");

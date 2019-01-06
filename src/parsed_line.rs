@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use crate::parse_utils::*;
 use crate::kvps::{KVPCollection, next_kvp, prev_kvp};
 /*
@@ -56,18 +55,26 @@ pub enum LineParseError {
     BadLogDate(String)
 }
 
+/// Represents a log file line after parsing into a convenient format.
+/// Owned strings are used for all components so that the upstream code in main can
+/// perform filtering and sorting without worrying about lifetimes. If things were &str,
+/// then they would have a lifetime tied to the original line read from the log file.
+/// Unfortunately, this design slows down the program by a factor of 3 (3 -> 10 seconds
+/// runtime).
+/// TODO: Just read the whole file into memory and split it, then use indexes into everything?
+/// TODO: It might actually be make_output_record which is the cause of the slowdown.
 #[derive(Debug, Default)]
-pub struct ParsedLine<'t> {
+pub struct ParsedLine {
     /// The entire original line with whitespace trimmed from the ends.
-    pub line: &'t str,
-    pub log_date: &'t str,
-    pub log_level: &'t str,
-    pub message: Cow<'t, str>,
-    pub kvps: KVPCollection<'t>
+    pub line: String,
+    pub log_date: String,
+    pub log_level: String,
+    pub message: String,
+    pub kvps: KVPCollection
 }
 
-impl<'t, 'k> ParsedLine<'t> {
-    pub fn new(line: &'t str) -> Result<Self, LineParseError> {
+impl ParsedLine {
+    pub fn new(line: &str) -> Result<Self, LineParseError> {
         if line.len() == 0 {
             return Err(LineParseError::EmptyLine);
         }
@@ -93,7 +100,7 @@ impl<'t, 'k> ParsedLine<'t> {
         let mut parsed_line = ParsedLine::default();
         parsed_line.line = unchecked_slice(line, &chars, start, end);
 
-        // Try to extract the log_date. 
+        // Try to extract the log_date.
         // Post: end is on the last fractional seconds digit.
         let end = extract_log_date(&chars, start, end)?;
         parsed_line.log_date = unchecked_slice(line, &chars, start, end);
@@ -127,14 +134,14 @@ impl<'t, 'k> ParsedLine<'t> {
             if potential_start.is_none() { break; }
             start = potential_start.unwrap();
         }
-        
+
         let start_of_message_index = next_none_ws_or_pipe_after(&chars, end_of_last_kvp, end);
         if start_of_message_index.is_none() {
             // Reached the end of the line without there being a message.
             return Ok(parsed_line);
         }
         let start_of_message_index = start_of_message_index.unwrap();
-        
+
         // Now we have located the start of the message we can begin to eat KVPs from the end of the line,
         // going backwards, until we are no longer hitting KVPs. Note that it is quite likely there will
         // be several lines separated by \r characters.
@@ -158,7 +165,7 @@ impl<'t, 'k> ParsedLine<'t> {
         } else {
             prev_none_ws(&chars, start_of_this_kvp - 1, limit).expect("Should be safe to unwrap, there should be a message.")
         };
-        
+
         // This 'if' is deals with the badly-formed line case of "2018-09-26 12:34:56.1146655 | pid=12".
         if !(last_valid_chars_index == start_of_message_index && last_valid_chars_index == end_of_message_index) {
             // Now we can extract the message, and clean it up so it has no newline characters,
@@ -341,7 +348,7 @@ fn extract_log_date(chars: &[(usize, char)], mut current: usize, limit: usize) -
 
 #[cfg(test)]
 mod white_space_tests {
-    use super::*; 
+    use super::*;
 
     #[test]
     fn blank_line_returns_error() {
@@ -371,7 +378,7 @@ mod white_space_tests {
 
 #[cfg(test)]
 mod log_date_tests {
-    use super::*; 
+    use super::*;
 
     #[test]
     fn short_line_returns_error() {
@@ -861,7 +868,7 @@ mod real_log_line_tests {
         line.push_str("\n summary=\"");
         line.push_str("\n Total surveyors: 577");
         line.push_str("\n Total surveyors matching criteria: 577\"");
-        
+
         let result = ParsedLine::new(&line).expect("Parse should succeed");
         assert_eq!(result.log_date, "2018-11-27 10:33:37.2324929");
         assert_eq!(result.log_level, "[INFO_]");
@@ -947,7 +954,7 @@ mod real_log_line_tests {
         assert_eq!(result.kvps.value("targetId"), "PD123456");
         assert_eq!(result.kvps.value("targetType"), "Case");
     }
- 
+
     #[test]
     pub fn notification_template_test() {
         let mut message = "Notification Template - [Invoice Authorisation Code => {InvoiceAuthorisationCode}".to_string();

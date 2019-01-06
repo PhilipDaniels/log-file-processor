@@ -5,7 +5,7 @@ use crate::configuration::Configuration;
 use crate::parsed_line::ParsedLine;
 use crate::parse_utils;
 
-pub fn make_output_record<'p>(config: &Configuration, parsed_line: &'p ParsedLine) -> Vec<String> {
+pub fn make_output_record(config: &Configuration, parsed_line: &ParsedLine) -> Vec<String> {
     let mut data = Vec::new();
 
     for column in &config.columns {
@@ -42,7 +42,7 @@ fn get_column(config: &Configuration, parsed_line: &ParsedLine, column: &str) ->
 /// of the message. All columns have associated regexes pre-calculated, even standard KVP ones.
 fn try_extract_from_message<'p>(config: &Configuration, parsed_line: &'p ParsedLine, column: &str) -> String {
     if let Some(regex) = config.column_regexes.get(column) {
-        if let Some(captures) = regex.captures(parsed_line.line) {
+        if let Some(captures) = regex.captures(&parsed_line.line) {
             let value = extract_kvp_value(captures);
             let value = parse_utils::safe_string(value);
             return value.trim().to_string();

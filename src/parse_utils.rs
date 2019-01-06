@@ -3,8 +3,6 @@
 /// One of the key differences between these functions and the built-in equivalents
 /// is that these functions take a 'limit' parameter.
 
-use std::borrow::Cow;
-
 /// The set of possible log level emitted by the Fundamentals logging framework.
 /// They are ordered by frequency of occurence, as this should give a (very small!)
 /// performance boost when checking for them.
@@ -68,8 +66,8 @@ pub fn safe_string(value: &str) -> String {
 /// We get the actual bounds from the .0 element of the chars tuples.
 /// 'unchecked' means that no checking is done for embedded new lines.
 #[inline(always)]
-pub fn unchecked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, end: usize) -> &'t str {
-    &line[chars[start].0 ..= chars[end].0]
+pub fn unchecked_slice(line: &str, chars: &[(usize, char)], start: usize, end: usize) -> String {
+    line[chars[start].0 ..= chars[end].0].to_string()
 }
 
 /// A convenience function for slicing into the original line, which ensures that we do
@@ -77,12 +75,12 @@ pub fn unchecked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize,
 /// We get the actual bounds from the .0 element of the chars tuples.
 /// 'checked' means that any embedded \r or \n characters will be replaced with spaces.
 #[inline(always)]
-pub fn checked_slice<'t>(line: &'t str, chars: &[(usize, char)], start: usize, end: usize) -> Cow<'t, str> {
+pub fn checked_slice(line: &str, chars: &[(usize, char)], start: usize, end: usize) -> String {
     let slice = unchecked_slice(line, chars, start, end);
     if slice.contains(|c| c == '\r' || c == '\n') {
-        Cow::Owned(safe_string(slice))
+        safe_string(&slice)
     } else {
-        Cow::Borrowed(slice)
+        slice
     }
 }
 
