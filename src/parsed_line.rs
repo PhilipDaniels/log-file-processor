@@ -61,7 +61,6 @@ pub enum LineParseError {
 /// then they would have a lifetime tied to the original line read from the log file.
 /// Unfortunately, this design slows down the program by a factor of 3 (3 -> 10 seconds
 /// runtime).
-/// TODO: Just read the whole file into memory and split it, then use indexes into everything?
 /// TODO: It might actually be make_output_record which is the cause of the slowdown.
 #[derive(Debug, Default)]
 pub struct ParsedLine {

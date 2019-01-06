@@ -65,7 +65,9 @@ impl Inputs {
             }
         }
 
-        i.files.sort();
+        // Put largest file first. Idea is that it will be the limiting time
+        // for the whole program to complete.
+        i.files.sort_by_key(|ifile| -(ifile.length as i64));
         i
     }
 

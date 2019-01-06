@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{File, read, write};
 use std::io::{BufReader};
 use std::time::Instant;
 use std::thread;
@@ -7,6 +7,7 @@ use std::sync::{Arc};
 use csv::{Writer, WriterBuilder};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, HumanBytes, HumanDuration};
 use structopt::StructOpt;
+use rayon::prelude::*;
 
 mod arguments;
 mod fast_logfile_iterator;
@@ -86,70 +87,60 @@ fn main() -> Result<(), io::Error> {
     // any one time. Say, N = 4, for example. Then we create new threads as existing
     // ones complete. Rayon would set N for us, but I can't get it to work with
     // the MultiProgress bar.
-    let mp = MultiProgress::new();
-    let longest_len = inputs.longest_input_name_len();
     let total_bytes = inputs.total_bytes() as u64;
     let input_count = inputs.len();
 
-    let configuration = Arc::new(configuration);
-    let mut all_lines = vec![];
-    for input_file in inputs.files {
-        let pb = make_progress_bar(longest_len, &mp, &input_file);
-        let conf = Arc::clone(&configuration);
-        let join_handle = thread::spawn(move || process_log_file(conf, input_file, pb));
-        let mut lines = join_handle.join().unwrap();
-        all_lines.append(&mut lines);
-    }
+    // Time to simply read and write the file
+    // Threading        Ordering        Read Only   Read & Write
+    // =========        ========        =========   ============
+    // Single           Small to Large  0.140
+    // Single           Large to small  0.140
+    // Rayon            Small to large  0.066
+    // Rayon            Large to small  0.066       0.143
+    // Rayon            Unsorted        0.066
 
-    mp.join().unwrap();
-    let elapsed = start_time.elapsed();
-    println!("Processed {} in {} files in {}.{:03} seconds",
-        HumanBytes(total_bytes), input_count,
-        elapsed.as_secs(), elapsed.subsec_millis());
+    let all_lines : usize = inputs.files.par_iter()
+        .map(|f| {
+            let whole_file = read(&f.path).unwrap();
+            println!("Read {} bytes", whole_file.len());
+            write(&f.output_path, &whole_file).unwrap();
+            whole_file.len()
+        })
+        .sum();
+
+    // for input_file in &inputs.files {
+    //     let whole_file = read(&input_file.path).unwrap();
+    //     println!("Read {} bytes", whole_file.len());
+    // }
+
+
+    // let configuration = Arc::new(configuration);
+    // let mut all_lines = vec![];
+    // for input_file in inputs.files {
+
+    //     let conf = Arc::clone(&configuration);
+    //     let join_handle = thread::spawn(move || process_log_file(conf, input_file));
+    //     let mut lines = join_handle.join().unwrap();
+    //     all_lines.append(&mut lines);
+    // }
+
+     let elapsed = start_time.elapsed();
+     println!("Processed {} in {} files in {}.{:03} seconds",
+         HumanBytes(total_bytes), input_count,
+         elapsed.as_secs(), elapsed.subsec_millis());
     Ok(())
 }
 
-fn make_progress_bar(longest_filename_length: usize, mp: &MultiProgress, input_file: &InputFile) -> ProgressBar {
-    let pb = mp.add(ProgressBar::new(input_file.length as u64));
-    pb.set_style(make_progress_bar_style(BarStyle::FileInProgress));
-
-    let prefix = format!("{:>width$}: ", input_file.filename_only_as_string, width=longest_filename_length + 1);
-    pb.set_prefix(&prefix);
-
-    // Redraw every 1% of additional progress. Without this, redisplaying
-    // the progress bar slows the program down a lot.
-    pb.set_draw_delta(input_file.length as u64 / 100);
-
-    pb
-}
-
-enum BarStyle {
-    FileInProgress,
-    FileCompleted,
-}
-
-fn make_progress_bar_style(bar_style: BarStyle) -> ProgressStyle {
-    ProgressStyle::default_bar().template(
-        match bar_style {
-            BarStyle::FileInProgress => "{prefix:.bold}▕{bar:50.white}▏{msg}  ({eta})",
-            BarStyle::FileCompleted =>  "{prefix:.bold}▕{bar:50.green}▏{msg}",
-        }
-    ).progress_chars("█▉▊▋▌▍▎▏  ")
-}
-
-fn process_log_file(config: Arc<Configuration>, input_file: InputFile, pb: ProgressBar) -> Vec<ParsedLine> {
+fn process_log_file(config: Arc<Configuration>, input_file: InputFile) -> Vec<ParsedLine> {
     let start_time = Instant::now();
 
-    let (parsed_lines, bytes_read) = get_parsed_lines(&config, &input_file, &pb);
+    let (parsed_lines, bytes_read) = get_parsed_lines(&config, &input_file);
     write_to_file(&config, &input_file, &parsed_lines).expect("Writing to file should succeed");
-
-    pb.set_style(make_progress_bar_style(BarStyle::FileCompleted));
-    pb.finish_with_message(&format!("Done - {} in {}", HumanBytes(bytes_read), HumanDuration(start_time.elapsed())));
 
     parsed_lines
 }
 
-fn get_parsed_lines(config: &Configuration, input_file: &InputFile, pb: &ProgressBar) -> (Vec<ParsedLine>, u64) {
+fn get_parsed_lines(config: &Configuration, input_file: &InputFile) -> (Vec<ParsedLine>, u64) {
     let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
     let reader = BufReader::new(input_file_handle);
 
@@ -157,9 +148,6 @@ fn get_parsed_lines(config: &Configuration, input_file: &InputFile, pb: &Progres
     let mut bytes_read_so_far = 0;
     for (bytes_read, log_line) in FastLogFileIterator::new(reader) {
         bytes_read_so_far += bytes_read;
-        pb.inc(bytes_read);
-        let msg = format!("{} / {}", HumanBytes(bytes_read_so_far), HumanBytes(input_file.length as u64));
-        pb.set_message(&msg);
 
         match ParsedLine::new(&log_line)
         {
@@ -185,7 +173,7 @@ fn write_to_file(config: &Configuration, input_file: &InputFile, parsed_lines: &
 
     for parsed_line in parsed_lines {
         let data = output::make_output_record(config, &parsed_line);
-        //writer.write_record(&data)?;
+        writer.write_record(&data)?;
     }
 
     Ok(())
