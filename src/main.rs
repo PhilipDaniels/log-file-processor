@@ -99,30 +99,24 @@ fn main() -> Result<(), io::Error> {
     // Rayon            Large to small  0.066       0.143
     // Rayon            Unsorted        0.066
 
-    let all_lines : usize = inputs.files.par_iter()
-        .map(|f| {
-            let whole_file = read(&f.path).unwrap();
-            println!("Read {} bytes", whole_file.len());
-            write(&f.output_path, &whole_file).unwrap();
-            whole_file.len()
-        })
-        .sum();
+    // let all_lines : usize = inputs.files.par_iter()
+    //     .map(|f| {
+    //         let whole_file = read(&f.path).unwrap();
+    //         println!("Read {} bytes", whole_file.len());
+    //         write(&f.output_path, &whole_file).unwrap();
+    //         whole_file.len()
+    //     })
+    //     .sum();
 
-    // for input_file in &inputs.files {
-    //     let whole_file = read(&input_file.path).unwrap();
-    //     println!("Read {} bytes", whole_file.len());
-    // }
+    let configuration = Arc::new(configuration);
+    let mut all_lines = vec![];
+    for input_file in inputs.files {
 
-
-    // let configuration = Arc::new(configuration);
-    // let mut all_lines = vec![];
-    // for input_file in inputs.files {
-
-    //     let conf = Arc::clone(&configuration);
-    //     let join_handle = thread::spawn(move || process_log_file(conf, input_file));
-    //     let mut lines = join_handle.join().unwrap();
-    //     all_lines.append(&mut lines);
-    // }
+        let conf = Arc::clone(&configuration);
+        let join_handle = thread::spawn(move || process_log_file(conf, input_file));
+        let mut lines = join_handle.join().unwrap();
+        all_lines.append(&mut lines);
+    }
 
      let elapsed = start_time.elapsed();
      println!("Processed {} in {} files in {}.{:03} seconds",
