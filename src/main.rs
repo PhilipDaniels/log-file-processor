@@ -6,8 +6,10 @@ use std::io::{self, Write};
 use std::sync::{Arc};
 use csv::{Writer, WriterBuilder};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle, HumanBytes, HumanDuration};
+use itertools::Itertools;
 use structopt::StructOpt;
 use rayon::prelude::*;
+use rayon::iter::Either;
 
 mod arguments;
 mod fast_logfile_iterator;
@@ -17,6 +19,7 @@ mod kvps;
 mod output;
 mod parse_utils;
 mod parsed_line;
+mod parsed_line2;
 mod profiles;
 use crate::arguments::Arguments;
 use crate::fast_logfile_iterator::FastLogFileIterator;
@@ -24,6 +27,7 @@ use crate::profiles::ProfileSet;
 use crate::configuration::{get_config, Configuration};
 use crate::parsed_line::ParsedLine;
 use crate::inputs::{Inputs, InputFile};
+use crate::parsed_line2::{ParsedLine2, ParsedLineError, ParseLineResult};
 
 /* TODOs
 =============================================================================
@@ -81,14 +85,6 @@ fn main() -> Result<(), io::Error> {
     //println!("profiles = {:#?}", profiles);
     //println!("configuration = {:#?}", configuration);
 
-    let start_time = Instant::now();
-
-    // TODO: What we would really like is to have N threads AT MOST processing at
-    // any one time. Say, N = 4, for example. Then we create new threads as existing
-    // ones complete. Rayon would set N for us, but I can't get it to work with
-    // the MultiProgress bar.
-    let total_bytes = inputs.total_bytes() as u64;
-    let input_count = inputs.len();
 
     // Time to simply read and write the file
     // Threading        Ordering        Read Only   Read & Write
@@ -99,31 +95,104 @@ fn main() -> Result<(), io::Error> {
     // Rayon            Large to small  0.066       0.143
     // Rayon            Unsorted        0.066
 
-    // let all_lines : usize = inputs.files.par_iter()
-    //     .map(|f| {
-    //         let whole_file = read(&f.path).unwrap();
-    //         println!("Read {} bytes", whole_file.len());
-    //         write(&f.output_path, &whole_file).unwrap();
-    //         whole_file.len()
-    //     })
-    //     .sum();
+    // Time     What
+    // ====     ====
+    // 0.143    Raw read & write whole file
+    // 0.143    ...plus find the line endings
 
-    let configuration = Arc::new(configuration);
+    let start_time = Instant::now();
+    let total_bytes = inputs.total_bytes() as u64;
+    let input_count = inputs.len();
+
+    // We need to get all the files into memory at the same time because we
+    // want to collect a consolidated set of parsed line (over all the files).
+    // The bytes of the files must therefore outlive all the parsed lines.
+    let all_files: Vec<(&InputFile, Vec<u8>)> = inputs.files.par_iter()
+        .map(|f| (f, read(&f.path).expect("Can read file")))
+        .collect();
+
+    // Process all files in parallel. Accumulate the lines written for each file so
+    // that they can be merged and written to a single, sorted, consolidated file.
     let mut all_lines = vec![];
-    for input_file in inputs.files {
+    all_files.par_iter()
+        .map(|(f, bytes)| {
+            let lines = find_lines(bytes);
+            println!("Found {} lines", lines.len());
 
-        let conf = Arc::clone(&configuration);
-        let join_handle = thread::spawn(move || process_log_file(conf, input_file));
-        let mut lines = join_handle.join().unwrap();
-        all_lines.append(&mut lines);
+            // Now we have the lines, we can parse each one in parallel. Line numbers help with error messages.
+            let (successfully_parsed_lines, errors): (Vec<_>, Vec<_>) =
+                lines.par_iter().enumerate()
+                    .map(|(line_num, &line)| parse_line(line_num, line))
+                    .filter(filter_parsed_line)
+                    .partition_map(|parsed_line_result| match parsed_line_result {
+                        Ok(parsed_line) => Either::Left(parsed_line),
+                        Err(err) => Either::Right(err)
+                    });
+
+            // Sort by log time.
+            // Optionally write each file to its own output CSV file.
+            //write(&f.output_path, &whole_file_bytes).unwrap();
+
+            // Then send back the parsed lines to the outer loop.
+            (*f, successfully_parsed_lines, errors)
+        })
+        .collect_into_vec(&mut all_lines);
+
+    // TODO: Write all_lines to consolidated.csv.
+
+    let elapsed = start_time.elapsed();
+    println!("Processed {} in {} files in {}.{:03} seconds",
+         HumanBytes(total_bytes),
+         input_count,
+         elapsed.as_secs(),
+         elapsed.subsec_millis());
+
+    Ok(())
+
+
+    // let configuration = Arc::new(configuration);
+    // let mut all_lines = vec![];
+    // for input_file in inputs.files {
+    //     let conf = Arc::clone(&configuration);
+    //     let join_handle = thread::spawn(move || process_log_file(conf, input_file));
+    //     let mut lines = join_handle.join().unwrap();
+    //     all_lines.append(&mut lines);
+    // }
+}
+
+/// Returns the Result<T,E> of parsing a line.
+fn parse_line(line_num: usize, line: &[u8]) -> ParseLineResult {
+    Ok(ParsedLine2::default())
+}
+
+
+/// Applies the appropriate filtering to parsed line results.
+/// Errors are always passed through, but successfully parsed lines may have a filter applied,
+/// for example to match a sysref or a date range.
+fn filter_parsed_line(parsed_line: &ParseLineResult) -> bool {
+    parsed_line.is_err() || true
+}
+
+/// Look for the \r\n line endings in the file and return a vector of
+/// slices, each slice being one line in the log file. Be careful not to be confused
+/// by any stray '\r's in the log file.
+fn find_lines(bytes: &[u8]) -> Vec<&[u8]> {
+    let mut cr_indexes: Vec<_> = bytes.iter().positions(|&c| c == b'\r').collect();
+    cr_indexes.retain(|&idx| idx == bytes.len() -1 || bytes[idx + 1] == b'\n');
+    cr_indexes.insert(0, 0);
+    let last_idx = cr_indexes[cr_indexes.len() - 1];
+    if last_idx == bytes.len() - 2 || last_idx == bytes.len() - 1 {
+        // The last idx is at the end of the file (accounting for "\r\n").
+    } else {
+        // It isn't. Be sure to include the trailing data in a slice.
+        cr_indexes.push(bytes.len() - 1);
     }
 
-     let elapsed = start_time.elapsed();
-     println!("Processed {} in {} files in {}.{:03} seconds",
-         HumanBytes(total_bytes), input_count,
-         elapsed.as_secs(), elapsed.subsec_millis());
-    Ok(())
+    cr_indexes.windows(2)
+        .map(|window| &bytes[window[0]..window[1]])
+        .collect()
 }
+
 
 fn process_log_file(config: Arc<Configuration>, input_file: InputFile) -> Vec<ParsedLine> {
     let start_time = Instant::now();
