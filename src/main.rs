@@ -13,7 +13,6 @@ use rayon::iter::Either;
 
 mod arguments;
 mod byte_extensions;
-mod fast_logfile_iterator;
 mod configuration;
 mod inputs;
 mod kvps;
@@ -23,7 +22,6 @@ mod parsed_line;
 mod parsed_line2;
 mod profiles;
 use crate::arguments::Arguments;
-use crate::fast_logfile_iterator::FastLogFileIterator;
 use crate::profiles::ProfileSet;
 use crate::configuration::{get_config, Configuration};
 use crate::parsed_line::ParsedLine;
@@ -195,53 +193,53 @@ fn find_lines(bytes: &[u8]) -> Vec<&[u8]> {
 }
 
 
-fn process_log_file(config: Arc<Configuration>, input_file: InputFile) -> Vec<ParsedLine> {
-    let start_time = Instant::now();
+// fn process_log_file(config: Arc<Configuration>, input_file: InputFile) -> Vec<ParsedLine> {
+//     let start_time = Instant::now();
 
-    let (parsed_lines, bytes_read) = get_parsed_lines(&config, &input_file);
-    write_to_file(&config, &input_file, &parsed_lines).expect("Writing to file should succeed");
+//     let (parsed_lines, bytes_read) = get_parsed_lines(&config, &input_file);
+//     write_to_file(&config, &input_file, &parsed_lines).expect("Writing to file should succeed");
 
-    parsed_lines
-}
+//     parsed_lines
+// }
 
-fn get_parsed_lines(config: &Configuration, input_file: &InputFile) -> (Vec<ParsedLine>, u64) {
-    let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
-    let reader = BufReader::new(input_file_handle);
+// fn get_parsed_lines(config: &Configuration, input_file: &InputFile) -> (Vec<ParsedLine>, u64) {
+//     let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
+//     let reader = BufReader::new(input_file_handle);
 
-    let mut lines = vec![];
-    let mut bytes_read_so_far = 0;
-    for (bytes_read, log_line) in FastLogFileIterator::new(reader) {
-        bytes_read_so_far += bytes_read;
+//     let mut lines = vec![];
+//     let mut bytes_read_so_far = 0;
+//     for (bytes_read, log_line) in FastLogFileIterator::new(reader) {
+//         bytes_read_so_far += bytes_read;
 
-        match ParsedLine::new(&log_line)
-        {
-            Ok(pl) => if parsed_line_passes_filter(&pl, &config) { lines.push(pl) },
-            Err(e) => {},//eprintln!("Error parsing line {}", log_line), This messes up the progress bars.
-        };
-    }
+//         match ParsedLine::new(&log_line)
+//         {
+//             Ok(pl) => if parsed_line_passes_filter(&pl, &config) { lines.push(pl) },
+//             Err(e) => {},//eprintln!("Error parsing line {}", log_line), This messes up the progress bars.
+//         };
+//     }
 
-    (lines, bytes_read_so_far)
-}
+//     (lines, bytes_read_so_far)
+// }
 
-fn parsed_line_passes_filter(parsed_line: &ParsedLine, config: &Configuration) -> bool {
-    true
-}
+// fn parsed_line_passes_filter(parsed_line: &ParsedLine, config: &Configuration) -> bool {
+//     true
+// }
 
-fn write_to_file(config: &Configuration, input_file: &InputFile, parsed_lines: &[ParsedLine]) -> io::Result<()> {
-    let mut writer = WriterBuilder::new()
-        .flexible(true)
-        .from_path(&input_file.output_path)
-        .expect("Cannot create CSV writer");
+// fn write_to_file(config: &Configuration, input_file: &InputFile, parsed_lines: &[ParsedLine]) -> io::Result<()> {
+//     let mut writer = WriterBuilder::new()
+//         .flexible(true)
+//         .from_path(&input_file.output_path)
+//         .expect("Cannot create CSV writer");
 
-    writer.write_record(config.columns.iter()).expect("Can write headings");
+//     writer.write_record(config.columns.iter()).expect("Can write headings");
 
-    for parsed_line in parsed_lines {
-        let data = output::make_output_record(config, &parsed_line);
-        writer.write_record(&data)?;
-    }
+//     for parsed_line in parsed_lines {
+//         let data = output::make_output_record(config, &parsed_line);
+//         writer.write_record(&data)?;
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 
 // fn get_output_records(config: &Configuration, parsed_lines: &[ParsedLine]) -> Vec<String> {
