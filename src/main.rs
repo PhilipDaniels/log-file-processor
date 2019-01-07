@@ -12,6 +12,7 @@ use rayon::prelude::*;
 use rayon::iter::Either;
 
 mod arguments;
+mod byte_extensions;
 mod fast_logfile_iterator;
 mod configuration;
 mod inputs;
@@ -162,7 +163,7 @@ fn main() -> Result<(), io::Error> {
 
 /// Returns the Result<T,E> of parsing a line.
 fn parse_line(line_num: usize, line: &[u8]) -> ParseLineResult {
-    Ok(ParsedLine2::default())
+    ParsedLine2::new(line_num, line)
 }
 
 
