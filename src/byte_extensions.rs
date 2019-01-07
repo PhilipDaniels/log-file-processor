@@ -2,6 +2,7 @@ pub trait ByteExtensions {
     fn is_whitespace(self) -> bool;
     fn is_whitespace_or_pipe(self) -> bool;
     fn is_kvp_terminator(self) -> bool;
+    fn is_decimal_digit(self) -> bool;
 }
 
 impl ByteExtensions for u8 {
@@ -18,6 +19,11 @@ impl ByteExtensions for u8 {
     #[inline(always)]
     fn is_kvp_terminator(self) -> bool {
         self == b'=' || self.is_whitespace()
+    }
+
+    #[inline(always)]
+    fn is_decimal_digit(self) -> bool {
+        self >= 48 && self <= 57
     }
 }
 
