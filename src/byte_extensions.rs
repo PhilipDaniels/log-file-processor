@@ -16,6 +16,7 @@ impl ByteExtensions for u8 {
         self == b'|' || self.is_whitespace()
     }
 
+    // This is only required in next_kvp. We can do it easier now.
     #[inline(always)]
     fn is_kvp_terminator(self) -> bool {
         self == b'=' || self.is_whitespace()

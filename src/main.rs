@@ -12,6 +12,7 @@ mod arguments;
 mod byte_extensions;
 mod configuration;
 mod inputs;
+mod kvp;
 mod kvps;
 mod output;
 mod parse_utils;
@@ -95,6 +96,8 @@ fn main() -> Result<(), io::Error> {
     // ====     ====
     // 0.143    Raw read & write whole file
     // 0.143    ...plus find the line endings
+    // 0.158    ...plus extract_log_date, alternatively
+    // 0.148    ...plus extract_log_date_fast
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;

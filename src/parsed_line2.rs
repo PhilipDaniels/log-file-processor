@@ -30,6 +30,8 @@ pub type ParseLineResult<'f> = Result<ParsedLine2<'f>, ParsedLineError<'f>>;
 
 
 impl<'f> ParsedLine2<'f> {
+    const LENGTH_OF_LOGGING_TIMESTAMP: usize = 27;
+
     /// Parses a line, returning a struct with all the individual pieces of information.
     pub fn new(line_num: usize, line: &[u8]) -> ParseLineResult {
         let mut line = line.trim_while(ByteExtensions::is_whitespace);
@@ -41,7 +43,7 @@ impl<'f> ParsedLine2<'f> {
         parsed_line.line = line;
 
         // Extract the log date, splitting the line into two slices - the log date and the remainder.
-        match ParsedLine2::extract_log_date(&line) {
+        match ParsedLine2::extract_log_date_fast(&line) {
             Ok((log_date_slice, remainder)) => {
                 parsed_line.log_date = log_date_slice;
                 line = remainder;
@@ -59,13 +61,20 @@ impl<'f> ParsedLine2<'f> {
         Ok(parsed_line)
     }
 
+    fn extract_log_date_fast(line: &[u8]) -> Result<(&[u8],&[u8]), String> {
+        if line.len() < ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP {
+            let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP);
+            Err(msg)
+        } else {
+            Ok(line.split_at(ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP))
+        }
+    }
+
     /// Extracts the log date from the message. We expect this to occur at the beginning of the message
     /// and to have a specific number of characters.
     fn extract_log_date(line: &[u8]) -> Result<(&[u8],&[u8]), String> {
-        const LENGTH_OF_LOGGING_TIMESTAMP: usize = 27;
-
-        if line.len() < LENGTH_OF_LOGGING_TIMESTAMP {
-            let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", LENGTH_OF_LOGGING_TIMESTAMP);
+        if line.len() < ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP {
+            let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP);
             return Err(msg);
         }
 
@@ -123,7 +132,7 @@ impl<'f> ParsedLine2<'f> {
         //     Ok(fraction_end)
         // }
 
-        Ok(line.split_at(LENGTH_OF_LOGGING_TIMESTAMP))
+        Ok(line.split_at(ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP))
     }
 }
 
