@@ -291,39 +291,3 @@ pub fn prev_kvp(chars: &[(usize, char)], current: usize, limit: usize) -> Option
         }
     }
 }
-
-#[cfg(test)]
-mod kvp_collection_tests {
-    use super::*;
-
-    #[test]
-    pub fn insert_does_not_add_if_strings_equal() {
-        let mut sut = KVPCollection::default();
-        sut.insert(KVPStrings { key: "car".to_string(), value: "ford".to_string() });
-        sut.insert(KVPStrings { key: "car".to_string(), value: "volvo".to_string() });
-
-        assert_eq!(sut.len(), 1);
-        assert_eq!(sut.value("car"), "ford");
-    }
-
-    #[test]
-    pub fn insert_adds_if_strings_different() {
-        let mut sut = KVPCollection::default();
-        sut.insert(KVPStrings { key: "car".to_string(), value: "ford".to_string() });
-        sut.insert(KVPStrings { key: "truck".to_string(), value: "volvo".to_string() });
-
-        assert_eq!(sut.len(), 2);
-        assert_eq!(sut.value("car"), "ford");
-        assert_eq!(sut.value("truck"), "volvo");
-    }
-
-    #[test]
-    pub fn get_value_works_case_insensitively() {
-        let mut sut = KVPCollection::default();
-        sut.insert(KVPStrings { key: "car".to_string(), value: "ford".to_string() });
-
-        assert_eq!(sut.len(), 1);
-        assert_eq!(sut.value("car"), "ford");
-        assert_eq!(sut.value("Car"), "ford");
-    }
-}
