@@ -71,7 +71,6 @@ impl<'f> KVPCollection<'f> {
         None
     }
 
-    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.kvps.len()
     }
@@ -139,11 +138,11 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
         let key_slice = &self[0..idx];
         const LOG_LEVEL_LENGTH: usize = 7;
         if self[idx] != b'=' {
-            println!("  >> Case1, key_slice = {:?}", str::from_utf8(key_slice).unwrap());
+            //println!("  >> Case1, key_slice = {:?}", str::from_utf8(key_slice).unwrap());
             if key_slice.len() < LOG_LEVEL_LENGTH { return no_kvp };
             let possible_log_level = &key_slice[0..LOG_LEVEL_LENGTH];
             if LOG_LEVELS.contains(&possible_log_level) {
-                println!("  >> Returning Log Level {:?}", String::from_utf8(possible_log_level.to_vec()));
+                //println!("  >> Returning Log Level {:?}", String::from_utf8(possible_log_level.to_vec()));
                 return KVPParseResult {
                     remaining_slice: &self[LOG_LEVEL_LENGTH..],
                     kvp: Some(KVP::new(possible_log_level, b""))
@@ -153,9 +152,9 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
 
         // The value should start immediately after the '=' with no intervening whitespace.
         let value_slice = &self[idx..].trim_left();
-        println!("  >> Case2, key_slice = {:?}, value_slice = {:?}",
-            str::from_utf8(key_slice).unwrap(),
-            str::from_utf8(value_slice).unwrap());
+        //println!("  >> Case2, key_slice = {:?}, value_slice = {:?}",
+        //    str::from_utf8(key_slice).unwrap(),
+        //    str::from_utf8(value_slice).unwrap());
 
         if value_slice.is_empty() {
             // This is the pathological case where we reached the end of the input such as: "....Key="
@@ -167,9 +166,9 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
             };
         }
 
-        println!("  >> Case3, key_slice = {:?}, value_slice = {:?}",
-            str::from_utf8(key_slice).unwrap(),
-            str::from_utf8(value_slice).unwrap());
+        //println!("  >> Case3, key_slice = {:?}, value_slice = {:?}",
+        //    str::from_utf8(key_slice).unwrap(),
+        //    str::from_utf8(value_slice).unwrap());
 
         // Now extract the value.
         if value_slice[0] == b'"' {
@@ -213,7 +212,7 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
             // We have a KVP of the form "Key=Value". Find the next whitespace character.
             let idx = value_slice.iter().position(|&c| c.is_whitespace()).unwrap_or(value_slice.len());
             let value_slice = &value_slice[0..idx];
-            println!("  >> Case K=V. idx = {}, value_slice = {:?}", idx, str::from_utf8(value_slice).unwrap());
+            //println!("  >> Case K=V. idx = {}, value_slice = {:?}", idx, str::from_utf8(value_slice).unwrap());
             // 1 for the equals sign.
             KVPParseResult {
                 remaining_slice: &self[key_slice.len() + 1 + value_slice.len()..],

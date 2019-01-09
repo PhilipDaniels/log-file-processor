@@ -1,4 +1,5 @@
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
+use crate::kvp::{KVPCollection, ByteSliceKvpExtensions};
 
 #[derive(Debug, Default)]
 pub struct ParsedLineError<'f> {
@@ -20,9 +21,9 @@ pub struct ParsedLine2<'f> {
     /// The entire original line with whitespace trimmed from the ends.
     pub line: &'f [u8],
     pub log_date: &'f [u8],
-    // pub log_level: String,
+    pub log_level: &'f [u8],
+    pub kvps: KVPCollection<'f>,
     // pub message: String,
-    // pub kvps: KVPCollection
 }
 
 /// The result of parsing a line is one of these types.
@@ -53,10 +54,22 @@ impl<'f> ParsedLine2<'f> {
 
         // Now, in the remainder of the line (if there is any), extract KVPs/prologue items until we reach the message.
         // First skip to the usual beginning of the first item in the prologue.
-        let line = line.trim_left_while(ByteExtensions::is_whitespace_or_pipe);
+        let mut line = line.trim_left_while(ByteExtensions::is_whitespace_or_pipe);
         if line.is_empty() { return Ok(parsed_line); }
 
-
+        loop {
+            let kvp_parse_result = line.next_kvp();
+            line = kvp_parse_result.remaining_slice.trim_left_while(ByteExtensions::is_whitespace_or_pipe);
+            if let Some(kvp) = kvp_parse_result.kvp {
+                if kvp.is_log_level {
+                    parsed_line.log_level = kvp.value;
+                } else {
+                    parsed_line.kvps.insert(kvp);
+                }
+            } else {
+                break;
+            }
+        }
 
         Ok(parsed_line)
     }
@@ -167,7 +180,7 @@ mod white_space_tests {
 }
 
 #[cfg(test)]
-mod log_date_tests {
+mod extract_log_date_tests {
     use super::*;
 
     #[test]
