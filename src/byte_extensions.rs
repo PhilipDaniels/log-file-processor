@@ -34,6 +34,8 @@ pub trait ByteSliceExtensions {
 
     fn trim_while<P>(self, pred: P) -> Self
         where P: Fn(u8) -> bool;
+
+    fn to_string(self) -> String;
 }
 
 impl<'s> ByteSliceExtensions for &'s [u8] {
@@ -81,6 +83,11 @@ impl<'s> ByteSliceExtensions for &'s [u8] {
         where P: Fn(u8) -> bool
     {
         self.trim_left_while(&pred).trim_right_while(pred)
+    }
+
+    /// Convert to a string, to help with debugging and testing.
+    fn to_string(self) -> String {
+        String::from_utf8(self.to_vec()).unwrap()
     }
 }
 

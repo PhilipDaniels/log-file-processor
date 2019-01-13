@@ -346,69 +346,6 @@ fn extract_log_date(chars: &[(usize, char)], mut current: usize, limit: usize) -
 }
 
 #[cfg(test)]
-mod prologue_tests {
-    use super::*;
-
-    #[test]
-    pub fn with_empty_prologue_returns_empty_kvps_and_log_level() {
-        let result = ParsedLine::new("2018-09-26 12:34:56.7654321").expect("Parse should succeed");
-        assert!(result.kvps.is_empty());
-        assert!(result.log_level.is_empty())
-    }
-
-    #[test]
-    pub fn with_prologue_containing_log_level_returns_appropriate_log_level() {
-        for log_level in &LOG_LEVELS {
-            let line = format!("2018-09-26 12:34:56.7654321 | a=b | {} | Message", log_level);
-            let result = ParsedLine::new(&line).expect("Parse should succeed");
-            assert_eq!(result.log_level, &log_level[0..log_level.len()]);
-        }
-    }
-
-    #[test]
-    pub fn with_prologue_containing_kpvs_returns_kvps() {
-        let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] | Message")
-            .expect("Parse should succeed");
-        assert_eq!(result.kvps.len(), 2);
-        assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps.value("a"), "b");
-        assert_eq!(result.kvps.value("PID"), "123");
-    }
-
-    #[test]
-    pub fn with_prologue_containing_all_kpv_forms_returns_kvps() {
-        //          _123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789
-        let line = "2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Message\n| | line2\nFoo=Bar SysRef=AA123456";
-        let result = ParsedLine::new(line).expect("Parse should succeed");
-        assert_eq!(result.kvps.len(), 5);
-        assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps.value("a"), "Value with space");
-        assert_eq!(result.kvps.value("PID"), "123");
-        assert_eq!(result.kvps.value("foo"), "Bar");
-        assert_eq!(result.kvps.value("sysref"), "AA123456");
-        assert_eq!(result.kvps.value("empty"), "");
-    }
-
-    #[test]
-    pub fn with_prologue_and_no_message_returns_kvps() {
-        let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] |").expect("Parse should succeed");
-        assert_eq!(result.kvps.len(), 2);
-        assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps.value("a"), "b");
-        assert_eq!(result.kvps.value("PID"), "123");
-    }
-
-    #[test]
-    pub fn with_prologue_and_no_message_returns_kvps2() {
-        let result = ParsedLine::new("2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]").expect("Parse should succeed");
-        assert_eq!(result.kvps.len(), 2);
-        assert_eq!(result.log_level, "[INFO_]");
-        assert_eq!(result.kvps.value("a"), "b");
-        assert_eq!(result.kvps.value("PID"), "123");
-    }
-}
-
-#[cfg(test)]
 mod trailing_kvp_tests {
     use super::*;
 

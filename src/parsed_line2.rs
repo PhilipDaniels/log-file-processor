@@ -1,5 +1,5 @@
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
-use crate::kvp::{KVPCollection, ByteSliceKvpExtensions};
+use crate::kvp::{self, KVPCollection, ByteSliceKvpExtensions};
 
 #[derive(Debug, Default)]
 pub struct ParsedLineError<'f> {
@@ -40,8 +40,7 @@ impl<'f> ParsedLine2<'f> {
             return Err(ParsedLineError{ line_num, line, message: "Line is empty".to_string()});
         }
 
-        let mut parsed_line = ParsedLine2::default();
-        parsed_line.line = line;
+        let mut parsed_line = ParsedLine2 { line_num, line, .. ParsedLine2::default() };
 
         // Extract the log date, splitting the line into two slices - the log date and the remainder.
         match ParsedLine2::extract_log_date_fast(&line) {
@@ -62,7 +61,7 @@ impl<'f> ParsedLine2<'f> {
             line = kvp_parse_result.remaining_slice.trim_left_while(ByteExtensions::is_whitespace_or_pipe);
             if let Some(kvp) = kvp_parse_result.kvp {
                 if kvp.is_log_level {
-                    parsed_line.log_level = kvp.value;
+                    parsed_line.log_level = kvp.key;
                 } else {
                     parsed_line.kvps.insert(kvp);
                 }
@@ -155,18 +154,18 @@ mod white_space_tests {
 
     #[test]
     fn blank_line_returns_error() {
-        let result = ParsedLine2::new(0, b"");
+        let result = ParsedLine2::new(22, b"");
         match result {
-            Err(ref e) if e.message == "Line is empty" => assert!(true),
+            Err(ref e) if e.message == "Line is empty" => assert_eq!(e.line_num, 22, "We expect the line number to be set"),
             _ => assert!(false, "Unexpected result"),
         }
     }
 
     #[test]
     fn whitespace_line_returns_error() {
-        let result = ParsedLine2::new(0, b"  \r  ");
+        let result = ParsedLine2::new(22, b"  \r  ");
         match result {
-            Err(ref e) if e.message == "Line is empty" => assert!(true),
+            Err(ref e) if e.message == "Line is empty" => assert_eq!(e.line_num, 22, "We expect the line number to be set"),
             _ => assert!(false, "Unexpected result"),
         }
     }
@@ -410,5 +409,76 @@ mod extract_log_date_tests {
     // fn with_shorter_precision_extracts_log_date() {
     //     let result = ParsedLine2::extract_log_date(b"2018-09-26 12:34:56.1234 | MachineName=foo | Message").expect("Parse should succeed");
     //     assert_eq!(result.0, b"2018-09-26 12:34:56.1234");
+    // }
+}
+
+#[cfg(test)]
+mod leading_kvps_tests {
+    use super::*;
+
+    #[test]
+    pub fn for_succcessful_parse_sets_line_number() {
+        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321").expect("Parse should succeed");
+        assert_eq!(result.line_num, 22);
+    }
+
+    #[test]
+    pub fn with_empty_prologue_returns_empty_kvps_and_empty_log_level() {
+        let result = ParsedLine2::new(0, b"2018-09-26 12:34:56.7654321").expect("Parse should succeed");
+        assert!(result.kvps.is_empty());
+        assert!(result.log_level.is_empty())
+    }
+
+    #[test]
+    pub fn with_prologue_containing_log_level_returns_appropriate_log_level() {
+        for log_level in &kvp::LOG_LEVELS {
+            let line = format!("2018-09-26 12:34:56.7654321 | a=b | {} | Message", String::from_utf8(log_level.to_vec()).unwrap());
+            let result = ParsedLine2::new(0, line.as_bytes()).expect("Parse should succeed");
+            assert_eq!(result.log_level, &log_level[0..log_level.len()]);
+        }
+    }
+
+    // We need a test for where the last thing is not a kvp but just a single word which is not the log level.
+
+    #[test]
+    pub fn with_prologue_containing_kpvs_returns_kvps() {
+        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] | Message")
+            .expect("Parse should succeed");
+        assert_eq!(result.kvps.len(), 2);
+        assert_eq!(result.log_level, b"[INFO_]");
+        assert_eq!(result.kvps.value(b"a"), b"b");
+        assert_eq!(result.kvps.value(b"PID"), b"123");
+    }
+
+    #[test]
+    pub fn with_prologue_and_no_message_returns_kvps() {
+        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] |").expect("Parse should succeed");
+        assert_eq!(result.kvps.len(), 2);
+        assert_eq!(result.log_level, b"[INFO_]");
+        assert_eq!(result.kvps.value(b"a"), b"b");
+        assert_eq!(result.kvps.value(b"PID"), b"123");
+    }
+
+    #[test]
+    pub fn with_prologue_and_no_message_returns_kvps2() {
+        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]").expect("Parse should succeed");
+        assert_eq!(result.kvps.len(), 2);
+        assert_eq!(result.log_level, b"[INFO_]", "Log level should be extracted");
+        assert_eq!(result.kvps.value(b"a"), b"b");
+        assert_eq!(result.kvps.value(b"PID"), b"123");
+    }
+
+    // #[test]
+    // pub fn with_prologue_containing_all_well_formed_kpv_types_returns_kvps() {
+    //     //          _123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789
+    //     let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Message\n| | line2\nFoo=Bar SysRef=AA123456";
+    //     let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+    //     //assert_eq!(result.kvps.len(), 5);
+    //     assert_eq!(result.log_level, b"[INFO_]");
+    //     assert_eq!(result.kvps.value(b"a"), b"Value with space");
+    //     assert_eq!(result.kvps.value(b"PID"), b"123");
+    //     assert_eq!(result.kvps.value(b"foo"), b"Bar");
+    //     assert_eq!(result.kvps.value(b"sysref"), b"AA123456");
+    //     assert_eq!(result.kvps.value(b"empty"), b"");
     // }
 }
