@@ -25,6 +25,9 @@ pub const LOG_DATE: &str = "LogDate";
 /// The name of the built-in LogLevel column.
 pub const LOG_LEVEL: &str = "LogLevel";
 
+/// The name of the built-in LogSource column.
+pub const LOG_SOURCE: &str = "LogSource";
+
 /// The name of the built-in Message column.
 pub const MESSAGE: &str = "Message";
 
@@ -70,7 +73,6 @@ impl<'f> KVPCollection<'f> {
 
     /// Gets a value, looking it up case-insensitively by the specified key.
     /// Returns None if there is no value for that key.
-    #[cfg(test)]
     pub fn get_value(&self, key: &[u8]) -> Option<&[u8]> {
         for kvp in &self.kvps {
             if kvp.key.eq_ignore_ascii_case(key) {

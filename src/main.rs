@@ -1,4 +1,4 @@
-use std::fs::{File, read, write};
+use std::fs::{File, read, write, remove_file};
 use std::time::Instant;
 use std::io::{self, Write};
 use csv::{Writer, WriterBuilder};
@@ -6,7 +6,6 @@ use indicatif::{HumanBytes};
 use itertools::Itertools;
 use structopt::StructOpt;
 use rayon::prelude::*;
-use rayon::iter::Either;
 
 mod arguments;
 mod byte_extensions;
@@ -18,9 +17,9 @@ mod parsed_line;
 mod profiles;
 use crate::arguments::Arguments;
 use crate::profiles::ProfileSet;
-use crate::configuration::{get_config};
+use crate::configuration::{get_config, Configuration};
 use crate::inputs::{Inputs, InputFile};
-use crate::parsed_line::{ParsedLine, ParsedLineError, ParseLineResult};
+use crate::parsed_line::{ParsedLine, ParseLineResult};
 
 /* TODOs
 =============================================================================
@@ -99,6 +98,8 @@ fn main() -> Result<(), io::Error> {
     // 0.303    ...plus collect everything into one big vector of results
     // 0.444    ...plus sorting everything
     // 0.400    ...but sorting using Rayon's par_sort or par_sort_by_key is faster
+    // 0.985    ...writing main fields with filtering
+    // 1.506    ...writing main fields and kvps with filtering
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -159,7 +160,7 @@ fn main() -> Result<(), io::Error> {
     });
 
     let total = all_lines_and_errors.len();
-    let error_count = all_lines_and_errors.iter().filter(|r| r.is_err()).count();
+    let error_count = write_output_files(&configuration, &all_lines_and_errors)?;
 
     let elapsed = start_time.elapsed();
     println!("Processed {} in {} files in {}.{:03} seconds, ok lines = {}, error lines = {}",
@@ -172,16 +173,6 @@ fn main() -> Result<(), io::Error> {
          );
 
     Ok(())
-
-
-    // let configuration = Arc::new(configuration);
-    // let mut all_lines = vec![];
-    // for input_file in inputs.files {
-    //     let conf = Arc::clone(&configuration);
-    //     let join_handle = thread::spawn(move || process_log_file(conf, input_file));
-    //     let mut lines = join_handle.join().unwrap();
-    //     all_lines.append(&mut lines);
-    // }
 }
 
 /// Applies the appropriate filtering to parsed line results.
@@ -211,94 +202,83 @@ fn find_lines(bytes: &[u8]) -> Vec<&[u8]> {
         .collect()
 }
 
-// fn parsed_line_passes_filter(parsed_line: &ParsedLine, config: &Configuration) -> bool {
-//     true
-// }
+const EMPTY: [&'static [u8]; 0] = [];
 
-// fn write_to_file(config: &Configuration, input_file: &InputFile, parsed_lines: &[ParsedLine]) -> io::Result<()> {
-//     let mut writer = WriterBuilder::new()
-//         .flexible(true)
-//         .from_path(&input_file.output_path)
-//         .expect("Cannot create CSV writer");
+fn write_output_files(config: &Configuration, results: &[ParseLineResult]) -> Result<usize, io::Error> {
+    const SUCCESS_FILE: &str = "consolidated.csv";
+    const ERROR_FILE: &str = "errors.csv";
 
-//     writer.write_record(config.columns.iter()).expect("Can write headings");
+    let mut error_count = 0;
+    let mut success_writer = WriterBuilder::new().flexible(true).from_path(SUCCESS_FILE)?;
+    let mut error_writer = WriterBuilder::new().flexible(true).from_path(ERROR_FILE)?;
 
-//     for parsed_line in parsed_lines {
-//         let data = output::make_output_record(config, &parsed_line);
-//         writer.write_record(&data)?;
-//     }
+    success_writer.write_record(config.columns.iter())?;
+    error_writer.write_field("Source")?;
+    error_writer.write_field("LineNum")?;
+    error_writer.write_field("Message")?;
+    error_writer.write_field("Line")?;
+    error_writer.write_record(&EMPTY)?;
 
-//     Ok(())
-// }
-
-
-// fn get_output_records(config: &Configuration, parsed_lines: &[ParsedLine]) -> Vec<String> {
-//     let mut writer = WriterBuilder::new()
-//         .flexible(true)
-//         .from_writer(vec![]);
-
-//     for parsed_line in parsed_lines {
-//         // columns is a Vec<String>, one entry for each column.
-//         let columns = output::make_output_record(config, &parsed_line);
-//         writer.write_record(&columns).expect("Writing a CSV record should always succeed.");
-//     }
-
-// //    let data = output::make_output_record(config, &parsed_line);
-//   //  writer.write_record(&data).expect("Writing a CSV record should always succeed.");
-
-//     ()
-// }
-
-/*
-fn process_log_file(config: Arc<Configuration>, input_file: InputFile, pb: ProgressBar) -> Vec<u8> {
-    let start_time = Instant::now();
-
-    let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
-    let reader = BufReader::new(input_file_handle);
-
-    // TODO: get parsed lines as a vector
-    // let parsed_lines = get_all_as_vec();
-    // let filtered_lines: vec = parsed_lines.iter().filter(|line| line.logdate > ...).collect();
-    // filtered_lines.sort();
-    // write out filtered_lines
-
-
-    // Write everything to an in-memory vector first.
-
-
-    let mut bytes_read_so_far = 0;
-    for (bytes_read, log_line) in FastLogFileIterator::new(reader) {
-        process_line(&config, log_line, &mut writer);
-        bytes_read_so_far += bytes_read;
-        pb.inc(bytes_read);
-        let msg = format!("{} / {}", HumanBytes(bytes_read_so_far), HumanBytes(input_file.length as u64));
-        pb.set_message(&msg);
+    for result in results {
+        match result {
+            Ok(parsed_line) => {
+                write_line(config, &mut success_writer, parsed_line)?;
+            },
+            Err(parsed_line_error) => {
+                error_writer.write_field(parsed_line_error.source)?;
+                error_writer.write_field(parsed_line_error.line_num.to_string())?;
+                error_writer.write_field(&parsed_line_error.message)?;
+                error_writer.write_field(parsed_line_error.line)?;
+                error_writer.write_record(&EMPTY)?;
+                error_count += 1;
+            },
+        }
     }
 
-    // Now write everything out to file in one go.
-    let mut output_file_handle = File::create(&input_file.output_path)
-        .expect(&format!("Could not open output file {}", &input_file.output_path));
-    let vec = writer.into_inner().unwrap();
-    output_file_handle.write(&vec)
-        .expect(&format!("Could not write to output file {}", &input_file.output_path));
+    //error_count += 1;
 
-    pb.set_style(make_progress_bar_style(BarStyle::FileCompleted));
-    pb.finish_with_message(&format!("Done - {} in {}", HumanBytes(bytes_read_so_far), HumanDuration(start_time.elapsed())));
+    success_writer.flush()?;
+    error_writer.flush()?;
 
-    vec
-}
-
-fn process_line(config: &Configuration, line: String,  writer: &mut Writer<Vec<u8>>) {
-    let parsed_line = ParsedLine::new(&line);
-
-    if parsed_line.is_err() {
-        let data = vec![""];
-        writer.write_record(&data).expect("Writing a CSV record should always succeed.");
-        return;
+    // Did we need this file?
+    if error_count == 0 {
+        remove_file(ERROR_FILE)?;
     }
 
-    let parsed_line = parsed_line.unwrap();
-    let data = output::make_output_record(config, &parsed_line);
-    writer.write_record(&data).expect("Writing a CSV record should always succeed.");
+    Ok(error_count)
 }
-*/
+
+fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, line: &ParsedLine) -> Result<(), io::Error>
+{
+    for column in &config.columns {
+        match column.as_str() {
+            kvp::LOG_DATE => writer.write_field(line.log_date)?,
+            kvp::LOG_LEVEL => writer.write_field(line.log_level)?,
+            kvp::LOG_SOURCE => writer.write_field(line.source)?,
+            kvp::MESSAGE => write_filtered_string(writer, line.message)?,
+            _ => { },
+            //     if let Some(kvp_value) = line.kvps.get_value(column.as_bytes()) {
+            //         write_filtered_string(writer, kvp_value)?;
+            //     } else {
+            //         writer.write_field(b"")?;
+            //     }
+            // }
+        }
+    }
+
+    writer.write_record(&EMPTY)?;
+
+    Ok(())
+}
+
+fn write_filtered_string(writer: &mut csv::Writer<std::fs::File>, s: &[u8]) -> Result<(), csv::Error> {
+    // Annoying the CSV cannot handle this for us.
+    let is_cr = |c| c == b'\r' || c == b'\n';
+
+    if s.iter().any(|&c| is_cr(c)) {
+        let safe_s: Vec<_> = s.iter().filter_map(|&c| if is_cr(c) { None } else { Some(c) }).collect();
+        writer.write_field(safe_s)
+    } else {
+        writer.write_field(s)
+    }
+}

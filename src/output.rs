@@ -1,7 +1,7 @@
-/// This module is responsible for preparing an output record from a ParsedLine.
-use regex::Captures;
+// This module is responsible for preparing an output record from a ParsedLine.
+// use regex::Captures;
 
-use crate::configuration::Configuration;
+//use crate::configuration::Configuration;
 //use crate::parse_utils;
 
 // pub fn make_output_record(config: &Configuration, parsed_line: &ParsedLine) -> Vec<String> {
@@ -58,62 +58,3 @@ use crate::configuration::Configuration;
 //         None => return ""
 //     }
 // }
-
-/*
-#[cfg(test)]
-mod make_output_record_extract_kvp_from_message_tests {
-    use super::*;
-    use crate::regexes;
-
-    fn testing_columns() -> Vec<Column> {
-        vec![
-            Column { name: "Foo".to_string(), regex: regexes::make_regex_for_column("Foo") }
-        ]
-    }
-
-    #[test]
-    pub fn when_kvp_exists_in_message() {
-        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo=Bar some words  SysRef=1").expect("Parse should succeed");
-        let columns = testing_columns();
-        let data = make_output_record(&parsed_line, &columns);
-        assert_eq!(data.len(), 1);
-        assert_eq!(data[0], "Bar");
-    }
-
-    #[test]
-    pub fn when_kvp_exists_in_message_with_double_quotes() {
-        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo=\"Bar some\" words  SysRef=1").expect("Parse should succeed");
-        let columns = testing_columns();
-        let data = make_output_record(&parsed_line, &columns);
-        assert_eq!(data.len(), 1);
-        assert_eq!(data[0], "Bar some");
-    }
-
-    #[test]
-    pub fn when_kvp_exists_in_message_with_empty_value() {
-        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo= some words  SysRef=1").expect("Parse should succeed");
-        let columns = testing_columns();
-        let data = make_output_record(&parsed_line, &columns);
-        assert_eq!(data.len(), 1, "Because we push an empty string if no match is found");
-        assert_eq!(data[0], "");
-    }
-
-    #[test]
-    pub fn when_kvp_exists_in_message_and_trailing_kvps() {
-        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Foo=Bar some words  SysRef=1 Foo=Canada").expect("Parse should succeed");
-        let columns = testing_columns();
-        let data = make_output_record(&parsed_line, &columns);
-        assert_eq!(data.len(), 1);
-        assert_eq!(data[0], "Canada", "Trailing KVPs should have priority");
-    }
-
-    #[test]
-    pub fn when_kvp_does_not_exist_in_message() {
-        let parsed_line = ParsedLine::new("2018-09-26 12:34:56.1146655 | pid=10 | Message Kibble=Bar some words  SysRef=1").expect("Parse should succeed");
-        let columns = testing_columns();
-        let data = make_output_record(&parsed_line, &columns);
-        assert_eq!(data.len(), 1, "Because we push an empty string if no match is found");
-        assert_eq!(data[0], "");
-    }
-}
-*/
