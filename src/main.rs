@@ -95,7 +95,7 @@ fn main() -> Result<(), io::Error> {
     // 0.158    ...plus extract_log_date, alternatively...
     // 0.148    ...plus extract_log_date_fast
     // 0.166    ...plus extract leading KVPs
-    // 0.276    ...plus extract trailing KVPs
+    // 0.276    ...plus extract trailing KVPs and message
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -110,7 +110,7 @@ fn main() -> Result<(), io::Error> {
 
     // Process all files in parallel. Accumulate the lines written for each file so
     // that they can be merged and written to a single, sorted, consolidated file.
-    let mut all_lines = vec![];
+    let mut all_lines_and_errors = vec![];
     all_files.par_iter()
         .map(|(f, bytes)| {
             let lines = find_lines(bytes);
@@ -119,7 +119,22 @@ fn main() -> Result<(), io::Error> {
             // Now we have the lines, we can parse each one in parallel. Line numbers help with error messages.
             let (successfully_parsed_lines, errors): (Vec<_>, Vec<_>) =
                 lines.par_iter().enumerate()
-                    .map(|(line_num, &line)| parse_line(line_num, line))
+                    .map(|(line_num, &line)| {
+                        let mut parsed_line_result = ParsedLine::new(line);
+
+                        // Attach line number and original source.
+                        match parsed_line_result {
+                            Ok(ref mut pl) => {
+                                pl.line_num = line_num;
+                                pl.source = &f.filename_only_as_string
+                            },
+                            Err(ref mut e) => {
+                                e.line_num = line_num;
+                                e.source = &f.filename_only_as_string
+                            },
+                        };
+                        parsed_line_result
+                    })
                     .filter(filter_parsed_line)
                     .partition_map(|parsed_line_result| match parsed_line_result {
                         Ok(parsed_line) => Either::Left(parsed_line),
@@ -131,9 +146,12 @@ fn main() -> Result<(), io::Error> {
             //write(&f.output_path, &whole_file_bytes).unwrap();
 
             // Then send back the parsed lines to the outer loop.
-            (*f, successfully_parsed_lines, errors)
+            (successfully_parsed_lines, errors)
         })
-        .collect_into_vec(&mut all_lines);
+        .collect_into_vec(&mut all_lines_and_errors);
+
+
+    //let ok_lines = all_lines_and_errors.0;
 
     // TODO: Write all_lines to consolidated.csv.
 
@@ -156,12 +174,6 @@ fn main() -> Result<(), io::Error> {
     //     all_lines.append(&mut lines);
     // }
 }
-
-/// Returns the Result<T,E> of parsing a line.
-fn parse_line(line_num: usize, line: &[u8]) -> ParseLineResult {
-    ParsedLine::new(line_num, line)
-}
-
 
 /// Applies the appropriate filtering to parsed line results.
 /// Errors are always passed through, but successfully parsed lines may have a filter applied,
