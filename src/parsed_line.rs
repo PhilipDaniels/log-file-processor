@@ -78,13 +78,13 @@ impl<'f> ParsedLineError<'f> {
 #[derive(Debug, Default)]
 pub struct ParsedLine<'f> {
     // It makes sorting easier if we also include a reference to the original file or HTTP source.
+    pub log_date: &'f [u8],
     pub source: &'f str,
     pub line_num: usize,
 
     /// The entire original line with whitespace trimmed from the ends.
     pub line: &'f [u8],
 
-    pub log_date: &'f [u8],
     pub log_level: &'f [u8],
     pub kvps: KVPCollection<'f>,
     pub message: &'f [u8],

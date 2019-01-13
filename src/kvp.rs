@@ -29,6 +29,7 @@ pub const LOG_LEVEL: &str = "LogLevel";
 pub const MESSAGE: &str = "Message";
 
 /// Represents a single Key-Value pair as parsed from the log line.
+//#[derive(Debug, Default)]
 #[derive(Debug, Default)]
 pub struct KVP<'f> {
     /// The key of the KVP. Should never be empty.
@@ -49,6 +50,7 @@ impl<'f> KVP<'f> {
 }
 
 /// A Vec is probably as fast as a HashMap for the small number of KVPs we expect to see.
+//#[derive(Debug, Default)]
 #[derive(Debug, Default)]
 pub struct KVPCollection<'f> {
     kvps: Vec<KVP<'f>>

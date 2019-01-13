@@ -96,6 +96,9 @@ fn main() -> Result<(), io::Error> {
     // 0.148    ...plus extract_log_date_fast
     // 0.166    ...plus extract leading KVPs
     // 0.276    ...plus extract trailing KVPs and message
+    // 0.303    ...plus collect everything into one big vector of results
+    // 0.444    ...plus sorting everything
+    // 0.400    ...but sorting using Rayon's par_sort is faster
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -110,15 +113,15 @@ fn main() -> Result<(), io::Error> {
 
     // Process all files in parallel. Accumulate the lines written for each file so
     // that they can be merged and written to a single, sorted, consolidated file.
-    let mut all_lines_and_errors = vec![];
-    all_files.par_iter()
-        .map(|(f, bytes)| {
-            let lines = find_lines(bytes);
-            println!("Found {} lines", lines.len());
 
-            // Now we have the lines, we can parse each one in parallel. Line numbers help with error messages.
-            let (successfully_parsed_lines, errors): (Vec<_>, Vec<_>) =
-                lines.par_iter().enumerate()
+    let mut all_lines_and_errors: Vec<_> =
+        all_files.par_iter()
+            .map(|(f, bytes)| {
+                let lines = find_lines(bytes);
+                println!("Found {} lines", lines.len());
+
+                let parsing_results : Vec<_> = lines.par_iter()
+                    .enumerate()
                     .map(|(line_num, &line)| {
                         let mut parsed_line_result = ParsedLine::new(line);
 
@@ -133,34 +136,41 @@ fn main() -> Result<(), io::Error> {
                                 e.source = &f.filename_only_as_string
                             },
                         };
+
                         parsed_line_result
                     })
                     .filter(filter_parsed_line)
-                    .partition_map(|parsed_line_result| match parsed_line_result {
-                        Ok(parsed_line) => Either::Left(parsed_line),
-                        Err(err) => Either::Right(err)
-                    });
+                    .collect();
 
-            // Sort by log time.
-            // Optionally write each file to its own output CSV file.
-            //write(&f.output_path, &whole_file_bytes).unwrap();
+                parsing_results
+            })
+            .flatten()
+            .collect();
 
-            // Then send back the parsed lines to the outer loop.
-            (successfully_parsed_lines, errors)
-        })
-        .collect_into_vec(&mut all_lines_and_errors);
+    // Doing this increases the time from 0.3 seconds to 0.35 seconds!
+    let total = all_lines_and_errors.len();
+    let error_count = all_lines_and_errors.iter().filter(|r| r.is_err()).count();
+    let (mut successes, mut failures): (Vec<_>, Vec<_>) = all_lines_and_errors
+         .into_iter()
+         .partition_map(|r| {
+             match r {
+                 Ok(v) => Either::Left(v),
+                 Err(v) => Either::Right(v),
+             }
+         });
 
-
-    //let ok_lines = all_lines_and_errors.0;
-
-    // TODO: Write all_lines to consolidated.csv.
+    successes.par_sort_by_key(|a| (a.log_date, a.source, a.line_num));
+    failures.par_sort_by_key(|a| (a.source, a.line_num));
 
     let elapsed = start_time.elapsed();
-    println!("Processed {} in {} files in {}.{:03} seconds",
+    println!("Processed {} in {} files in {}.{:03} seconds, ok lines = {}, error lines = {}",
          HumanBytes(total_bytes),
          input_count,
          elapsed.as_secs(),
-         elapsed.subsec_millis());
+         elapsed.subsec_millis(),
+         total - error_count,
+         error_count
+         );
 
     Ok(())
 
@@ -201,35 +211,6 @@ fn find_lines(bytes: &[u8]) -> Vec<&[u8]> {
         .map(|window| &bytes[window[0]..window[1]])
         .collect()
 }
-
-
-// fn process_log_file(config: Arc<Configuration>, input_file: InputFile) -> Vec<ParsedLine> {
-//     let start_time = Instant::now();
-
-//     let (parsed_lines, bytes_read) = get_parsed_lines(&config, &input_file);
-//     write_to_file(&config, &input_file, &parsed_lines).expect("Writing to file should succeed");
-
-//     parsed_lines
-// }
-
-// fn get_parsed_lines(config: &Configuration, input_file: &InputFile) -> (Vec<ParsedLine>, u64) {
-//     let input_file_handle = File::open(&input_file.path).expect("Could not open the input log file");
-//     let reader = BufReader::new(input_file_handle);
-
-//     let mut lines = vec![];
-//     let mut bytes_read_so_far = 0;
-//     for (bytes_read, log_line) in FastLogFileIterator::new(reader) {
-//         bytes_read_so_far += bytes_read;
-
-//         match ParsedLine::new(&log_line)
-//         {
-//             Ok(pl) => if parsed_line_passes_filter(&pl, &config) { lines.push(pl) },
-//             Err(e) => {},//eprintln!("Error parsing line {}", log_line), This messes up the progress bars.
-//         };
-//     }
-
-//     (lines, bytes_read_so_far)
-// }
 
 // fn parsed_line_passes_filter(parsed_line: &ParsedLine, config: &Configuration) -> bool {
 //     true
