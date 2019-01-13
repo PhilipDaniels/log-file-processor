@@ -128,7 +128,7 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
             kvp: None
         };
 
-        if self.len() == 0 { return no_kvp; };
+        if self.is_empty() { return no_kvp; };
 
         // Scan forward looking for the equals sign. If we hit a whitespace character instead,
         // then we don't actually have a KVP. It MAY be the log-level in the prologue or we
@@ -232,9 +232,109 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
     /// a quote or a space in it. 'Key' may contain '.', as in "HttpRequest.QueryString".
     ///
     /// Pre: The last character of the slice is the last character of the value - '=', 'e' or
-    /// '"' in the above examples.
+    /// '"' in the above examples. In particular, it is not a whitespace value: you must trim
+    /// trailing whitespace before calling.
     fn prev_kvp(self) -> KVPParseResult<'s> {
-        KVPParseResult::default()
+        let no_kvp = KVPParseResult { remaining_slice: self, kvp: None };
+        if self.is_empty() { return no_kvp; };
+
+        // No test cases for this, it is just checking the pre-conditions.
+        let last_char = self[self.len() - 1];
+        if last_char.is_whitespace() { return no_kvp };
+
+        let extract_key = |value_slice: &[u8], remainder: &[u8]| -> KVPParseResult<'s> {
+            let no_kvp = KVPParseResult { remaining_slice: self, kvp: None };
+            if remainder.is_empty() { return no_kvp; };
+
+            // We expect the character immediately before the '=' to be non-ws.
+            if remainder[remainder.len() - 1].is_whitespace() { return no_kvp; };
+
+            // Looks like we have a valid KVP. Find the start of the key.
+            let key_start_index = remainder.iter().rposition(|&c| c.is_whitespace()).unwrap_or(0);
+            let key_slice = remainder[]
+
+            KVPParseResult::default()
+        };
+
+        match last_char {
+            b'=' => {
+                // We possibly have an empty KVP of the form 'Key='.
+                let value_slice = b"";
+                let remainder = self;
+                println!("  >> Case1, value_slice = {:?}, remainder = {:?}", value_slice.to_string(), remainder.to_string());
+                extract_key(value_slice, remainder)
+            },
+            b'"' => {
+                // We possibly a KVP of the form 'Key="some value with spaces"'.
+                // Find the previous double quote.
+                let index_of_leading_double_quote = self.iter().rev().skip(1).position(|&c| c == b'"');
+                if index_of_leading_double_quote.is_none() { return no_kvp };
+                let index_of_leading_double_quote = index_of_leading_double_quote.unwrap();
+
+                let value_slice = &self[index_of_leading_double_quote + 1..self.len() - 1];
+
+                // The previous value is expected to be '='.
+                if self[index_of_leading_double_quote - 1] != b'=' { return no_kvp };
+                let remainder = &self[0..index_of_leading_double_quote - 2];
+                println!("  >> Case2, value_slice = {:?}, remainder = {:?}", value_slice.to_string(), remainder.to_string());
+                extract_key(value_slice, remainder)
+            },
+            _ => {
+                // We possibly a KVP of the form 'Key=Value'. But we may also just be looking at
+                // some random word. We expect to find an '=' before we hit any whitespace.
+                let index_of_equals = self.iter().rposition(|&c| c == b'=' || c.is_whitespace());
+                if index_of_equals.is_none() { return no_kvp };
+
+                // Check to see if we hit an '=' first.
+                let index_of_equals = index_of_equals.unwrap();
+                if self[index_of_equals] != b'=' {
+                    return no_kvp;
+                }
+
+                let value_slice = &self[index_of_equals..];
+                let remainder = &self[0..index_of_equals];
+                println!("  >> Case3, value_slice = {:?}, remainder = {:?}", value_slice.to_string(), remainder.to_string());
+                extract_key(value_slice, remainder)
+            },
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod kvp_collection_tests {
+    use super::*;
+
+    #[test]
+    pub fn insert_does_not_add_if_strings_equal() {
+        let mut sut = KVPCollection::default();
+        sut.insert(KVP::new(b"car", b"ford"));
+        sut.insert(KVP::new(b"car", b"volvo"));
+
+        assert_eq!(sut.len(), 1);
+        assert_eq!(sut.value(b"car"), b"ford");
+    }
+
+    #[test]
+    pub fn insert_adds_if_strings_different() {
+        let mut sut = KVPCollection::default();
+        sut.insert(KVP::new(b"car", b"ford"));
+        sut.insert(KVP::new(b"truck", b"volvo"));
+
+        assert_eq!(sut.len(), 2);
+        assert_eq!(sut.value(b"car"), b"ford");
+        assert_eq!(sut.value(b"truck"), b"volvo");
+    }
+
+    #[test]
+    pub fn get_value_works_case_insensitively() {
+        let mut sut = KVPCollection::default();
+        sut.insert(KVP::new(b"car", b"ford"));
+
+        assert_eq!(sut.len(), 1);
+        assert_eq!(sut.get_value(b"car").unwrap(), b"ford");
+        assert_eq!(sut.get_value(b"Car").unwrap(), b"ford");
+        assert_eq!(sut.get_value(b"XYZ"), None);
     }
 }
 
@@ -554,74 +654,258 @@ mod next_kvp_tests {
     }
 }
 
-// &b""
-// &b" \r\n"
-
-// b"[DEBUG]"
-// b"[DEBUG]\n"
-// b"[DEBUG] | "
-
-// b"Car"
-// b"Car\r"
-// b"Car REM"
-
-// b"Car="
-// b"Car= "
-// b"Car= REM"
-// b"Car=\r"
-
-// b"Car=Ford"
-// b"Car=Ford "
-// b"Car=Ford REM"
-// b"Car=Ford\r"
-
-// b"Car=\""
-// b"Car=\" "
-// b"Car=\" REM"
-// b"Car=\"For"
-// b"Car=\"For a"
-// b"Car=\"For\r\n"
-// b"Car=\"\r"
-
-// b"Car=\"\""
-// b"Car=\" \""
-// b"Car=\"Ford Fiesta\"
-// b"Car=\"  Ford Fiesta  \" REM"
-// b"Car=\"  Ford\rFiesta  \""
-
 #[cfg(test)]
-mod kvp_collection_tests {
+mod prev_kvp_tests {
     use super::*;
 
     #[test]
-    pub fn insert_does_not_add_if_strings_equal() {
-        let mut sut = KVPCollection::default();
-        sut.insert(KVP::new(b"car", b"ford"));
-        sut.insert(KVP::new(b"car", b"volvo"));
-
-        assert_eq!(sut.len(), 1);
-        assert_eq!(sut.value(b"car"), b"ford");
+    pub fn for_empty_slice() {
+        let slice = &b"";
+        let result = slice.prev_kvp();
+        assert!(result.kvp.is_none());
+        assert!(result.remaining_slice.is_empty());
     }
 
     #[test]
-    pub fn insert_adds_if_strings_different() {
-        let mut sut = KVPCollection::default();
-        sut.insert(KVP::new(b"car", b"ford"));
-        sut.insert(KVP::new(b"truck", b"volvo"));
+    pub fn for_non_kvp_word_only() {
+        let slice = &b"Car";
+        let result = slice.prev_kvp();
 
-        assert_eq!(sut.len(), 2);
-        assert_eq!(sut.value(b"car"), b"ford");
-        assert_eq!(sut.value(b"truck"), b"volvo");
+        assert!(result.kvp.is_none());
+        assert_eq!(result.remaining_slice, b"Car");
     }
 
     #[test]
-    pub fn get_value_works_case_insensitively() {
-        let mut sut = KVPCollection::default();
-        sut.insert(KVP::new(b"car", b"ford"));
+    pub fn for_non_kvp_word_and_cr() {
+        let slice = &b"\rCar";
+        let result = slice.prev_kvp();
 
-        assert_eq!(sut.len(), 1);
-        assert_eq!(sut.get_value(b"car").unwrap(), b"ford");
-        assert_eq!(sut.get_value(b"Car").unwrap(), b"ford");
-        assert_eq!(sut.get_value(b"XYZ"), None);
+        assert!(result.kvp.is_none());
+        assert_eq!(result.remaining_slice, b"\rCar");
+    }
+
+    #[test]
+    pub fn for_non_kvp_word_and_remainder() {
+        let slice = &b"Car REM";
+        let result = slice.prev_kvp();
+
+        assert!(result.kvp.is_none());
+        assert_eq!(result.remaining_slice, b"Car REM");
+    }
+
+    #[test]
+    pub fn for_key_only() {
+        let slice = &b"Car=";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert!(kvp.value.is_empty());
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_only_and_whitespce() {
+        let slice = &b" Car=";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert!(kvp.value.is_empty());
+        assert_eq!(result.remaining_slice, b" ");
+    }
+
+    #[test]
+    pub fn for_key_only_and_remainder() {
+        let slice = &b"Car= REM";
+        let result = slice.prev_kvp();
+
+        assert!(result.kvp.is_none());
+        assert_eq!(result.remaining_slice, b"Car= REM");
+    }
+
+    #[test]
+    pub fn for_key_only_and_cr() {
+        let slice = &b"\rCar=";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert!(kvp.value.is_empty());
+        assert_eq!(result.remaining_slice, b"\r");
+    }
+
+    #[test]
+    pub fn for_key_and_value() {
+        let slice = &b"Car=Ford";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"Ford");
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_and_value_and_whitespace() {
+        let slice = &b" Car=Ford";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(result.remaining_slice, b" ");
+    }
+
+    #[test]
+    pub fn for_key_and_value_and_remainder() {
+        let slice = &b"REM Car=Ford";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(result.remaining_slice, b"REM ");
+    }
+
+    #[test]
+    pub fn for_key_and_unclosed_quote_only() {
+        let slice = &b"Car=\"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert!(kvp.value.is_empty());
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_and_unclosed_quote_and_whitespace() {
+        let slice = &b" Car=\"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert!(kvp.value.is_empty());
+        assert_eq!(result.remaining_slice, b"REM ");
+    }
+
+    #[test]
+    pub fn for_key_and_unclosed_quote_and_remainder() {
+        let slice = &b"Car=\" REM";
+        let result = slice.prev_kvp();
+
+        assert!(result.kvp.is_none());
+        assert_eq!(result.remaining_slice, b"Car=Ford REM");
+    }
+
+    #[test]
+    pub fn for_key_and_unclosed_quote_and_remainder2() {
+        // This might not be acceptable.
+        let slice = &b"Car=\"For";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"For");
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_and_unclosed_quote_and_remainder3() {
+        // This might not be acceptable.
+        let slice = &b"Car=\"For a";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"For a");
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_and_unclosed_quote_and_remainder4() {
+        let slice = &b"\r\nCar=\"For";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"For");
+        assert_eq!(result.remaining_slice, b"\r\n");
+    }
+
+    #[test]
+    pub fn for_key_and_unclosed_quote_and_cr() {
+        let slice = &b"\rCar=\"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert!(kvp.value.is_empty());
+        assert_eq!(result.remaining_slice, b"\r");
+    }
+
+    #[test]
+    pub fn for_key_and_value_in_closed_quotes_but_empty() {
+        let slice = &b"Car=\"\"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert!(kvp.value.is_empty());
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_and_value_in_closed_quotes_but_whitespace() {
+        let slice = &b"Car=\" \"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b" ");
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_and_value_in_closed_quotes() {
+        let slice = &b"Car=\"Ford Fiesta\"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"Ford Fiesta");
+        assert!(result.remaining_slice.is_empty());
+    }
+
+    #[test]
+    pub fn for_key_and_value_in_closed_quotes_and_whitespace() {
+        let slice = &b" Car=\"Ford Fiesta\"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"Ford Fiesta");
+        assert_eq!(result.remaining_slice, b" ");
+    }
+
+    #[test]
+    pub fn for_key_and_value_in_closed_quotes_and_remainder() {
+        let slice = &b"Car=\"  Ford Fiesta  \" REM";
+        let result = slice.prev_kvp();
+
+        assert!(result.kvp.is_none());
+        assert_eq!(result.remaining_slice, b"Car=\"  Ford Fiesta  \" REM");
+    }
+
+    #[test]
+    pub fn for_key_and_value_in_closed_quotes_and_remainder2() {
+        let slice = &b"REM Car=\"  Ford Fiesta  \"";
+        let result = slice.prev_kvp();
+
+        let kvp = result.kvp.unwrap();
+        assert_eq!(kvp.key, b"Car");
+        assert_eq!(kvp.value, b"  Ford Fiesta  ");
+        assert_eq!(result.remaining_slice, b"REM ");
     }
 }

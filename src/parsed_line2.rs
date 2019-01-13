@@ -70,6 +70,13 @@ impl<'f> ParsedLine2<'f> {
             }
         }
 
+        // If there is nothing left (unlikely, means there was no message), we are done.
+        if line.is_empty() { return Ok(parsed_line); }
+
+        // Now find trailing KVPs. There are usually more of these than leading ones.
+
+
+
         Ok(parsed_line)
     }
 
