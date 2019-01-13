@@ -158,20 +158,8 @@ fn main() -> Result<(), io::Error> {
         }
     });
 
-    // Doing this increases the time from 0.3 seconds to 0.35 seconds!
     let total = all_lines_and_errors.len();
     let error_count = all_lines_and_errors.iter().filter(|r| r.is_err()).count();
-    // let (mut successes, mut failures): (Vec<_>, Vec<_>) = all_lines_and_errors
-    //      .into_iter()
-    //      .partition_map(|r| {
-    //          match r {
-    //              Ok(v) => Either::Left(v),
-    //              Err(v) => Either::Right(v),
-    //          }
-    //      });
-
-    // successes.par_sort_by_key(|a| (a.log_date, a.source, a.line_num));
-    // failures.par_sort_by_key(|a| (a.source, a.line_num));
 
     let elapsed = start_time.elapsed();
     println!("Processed {} in {} files in {}.{:03} seconds, ok lines = {}, error lines = {}",
