@@ -3,7 +3,7 @@ use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
 /// This module contains the representation of a Key-Value pair as parsed from the original line,
 /// and some utility methods for doing that parsing.
 
-/// The set of possible log level emitted by the Fundamentals logging framework.
+/// The set of possible log level emitted by the logging framework.
 /// They are ordered by frequency of occurence, as this should give a (very small!)
 /// performance boost when checking for them.
 pub const LOG_LEVELS: [&'static [u8]; 9] =
@@ -19,6 +19,14 @@ pub const LOG_LEVELS: [&'static [u8]; 9] =
     b"[DEBG1]",
 ];
 
+/// The name of the built-in LogDate column.
+pub const LOG_DATE: &str = "LogDate";
+
+/// The name of the built-in LogLevel column.
+pub const LOG_LEVEL: &str = "LogLevel";
+
+/// The name of the built-in Message column.
+pub const MESSAGE: &str = "Message";
 
 /// Represents a single Key-Value pair as parsed from the log line.
 #[derive(Debug, Default)]
@@ -60,6 +68,7 @@ impl<'f> KVPCollection<'f> {
 
     /// Gets a value, looking it up case-insensitively by the specified key.
     /// Returns None if there is no value for that key.
+    #[cfg(test)]
     pub fn get_value(&self, key: &[u8]) -> Option<&[u8]> {
         for kvp in &self.kvps {
             if kvp.key.eq_ignore_ascii_case(key) {
@@ -70,6 +79,7 @@ impl<'f> KVPCollection<'f> {
         None
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.kvps.len()
     }

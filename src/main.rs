@@ -13,16 +13,12 @@ mod byte_extensions;
 mod configuration;
 mod inputs;
 mod kvp;
-mod kvps;
 mod output;
-mod parse_utils;
-mod parsed_line;
 mod parsed_line2;
 mod profiles;
 use crate::arguments::Arguments;
 use crate::profiles::ProfileSet;
 use crate::configuration::{get_config};
-use crate::parsed_line::ParsedLine;
 use crate::inputs::{Inputs, InputFile};
 use crate::parsed_line2::{ParsedLine2, ParsedLineError, ParseLineResult};
 

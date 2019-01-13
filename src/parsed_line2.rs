@@ -1,6 +1,53 @@
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
 use crate::kvp::{self, KVPCollection, ByteSliceKvpExtensions};
 
+/*
+Notes
+=====
+- The framework replaces any \r\n in messages with \n
+  Therefore a message is always terminated by a \r\n - 0D 0A - pair.
+
+Patterns known to the logging framework:
+    var replacements = new Dictionary<string, string>
+    {
+        {"timestamp", DateTime.UtcNow.AsLoggingTimeStamp() },
+        {"processId", Logger.GetCurrentProcessID().ToString(CultureInfo.InvariantCulture)},
+        {"threadId", Logger.GetCurrentManagedThreadId().ToString(CultureInfo.InvariantCulture)},
+        {"level", Logger.LevelDescriptor(level)},
+        {"message", parameters != null ? string.Format(format, parameters) : format},
+        {"tags", tags.ToString()},
+        {"correlationKey", this.CorrelationKey},
+        {"eventId", this.EventId.ToString(CultureInfo.InvariantCulture)},
+        {"appName", ApplicationName },
+        {"machineName", MachineName }
+    };
+
+This function is used to quote LoggingContext data (but only in the context.)
+    public static string QuoteForLogging(this string source)
+    {
+        if (source == null)
+        {
+            return RepresentationOfNull;
+        }
+
+        if (source.Contains(" ") || source.Contains("\""))
+        {
+            source = source.Replace('"', '_');
+            return '"' + source + '"';
+        }
+        else
+        {
+            return source;
+        }
+    }
+
+
+Some message formats
+    messageFormat="{timestamp} | MachineName={machineName} | AppName={appName} | pid={processId} | tid={threadId} | {level} | {message}"  (Case Service)
+    messageFormat="{timestamp} | MachineName={machineName} | ApplicationName={appName} | pid={processId} | tid={threadId} | {level} | {message}"  (Case Service)
+    messageFormat="{timestamp} | AppName={appName} | pid={processId} | tid={threadId} | {level} | {message}"  (Case Service)
+*/
+
 #[derive(Debug, Default)]
 pub struct ParsedLineError<'f> {
     /// The zero-based line number.

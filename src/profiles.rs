@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde_derive::{Serialize, Deserialize};
 
 use crate::configuration::{DEFAULT_PROFILE_NAME, DEFAULT_MAX_MESSAGE_LENGTH};
-use crate::parse_utils::{LOG_DATE, LOG_LEVEL, MESSAGE};
+use crate::kvp::{LOG_DATE, LOG_LEVEL, MESSAGE};
 
 /// Represents a profile as defined in the configuration file.
 /// The main difference between this and the final configuration is that
