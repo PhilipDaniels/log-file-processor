@@ -1,4 +1,3 @@
-use std::str;
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
 
 /// This module contains the representation of a Key-Value pair as parsed from the original line,
@@ -291,8 +290,8 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
                 //println!("  >> Case quoted, value_slice = {:?}", value_slice.to_string());
 
                 if index_of_leading_double_quote == 0 {
-                    // This is for when self is something like 'A message in quotes"'.
-                    // See test for_quoted_message_only
+                    // This is for when self is something like '"A message in quotes"'.
+                    // See test 'for_quoted_message_only'.
                     // There are no actual log lines like this, but it can occur once leading kvps have been trimmed.
                     return no_kvp;
                 }
@@ -793,30 +792,16 @@ mod prev_kvp_tests {
     pub fn for_key_and_unclosed_quote_only() {
         let slice = &b"Car=\"";
         let result = slice.prev_kvp();
-
-        // now getting back none
         assert!(result.kvp.is_none());
         assert_eq!(result.remaining_slice, b"Car=\"");
-
-        // let kvp = result.kvp.unwrap();
-        // assert_eq!(kvp.key, b"Car");
-        // assert!(kvp.value.is_empty());
-        // assert!(result.remaining_slice.is_empty());
     }
 
     #[test]
     pub fn for_key_and_unclosed_quote_and_whitespace() {
         let slice = &b" Car=\"";
         let result = slice.prev_kvp();
-
-        // now getting back none
         assert!(result.kvp.is_none());
         assert_eq!(result.remaining_slice, b" Car=\"");
-
-        // let kvp = result.kvp.unwrap();
-        // assert_eq!(kvp.key, b"Car");
-        // assert!(kvp.value.is_empty());
-        // assert_eq!(result.remaining_slice, b"REM ");
     }
 
     #[test]
@@ -830,34 +815,20 @@ mod prev_kvp_tests {
 
     #[test]
     pub fn for_key_and_unclosed_quote_and_remainder2() {
-        // This might not be acceptable.
         let slice = &b"Car=\"For";
         let result = slice.prev_kvp();
 
-        // now getting back none
         assert!(result.kvp.is_none());
         assert_eq!(result.remaining_slice, b"Car=\"For");
-
-        // let kvp = result.kvp.unwrap();
-        // assert_eq!(kvp.key, b"Car");
-        // assert_eq!(kvp.value, b"For");
-        // assert!(result.remaining_slice.is_empty());
     }
 
     #[test]
     pub fn for_key_and_unclosed_quote_and_remainder3() {
-        // This might not be acceptable.
         let slice = &b"Car=\"For a";
         let result = slice.prev_kvp();
 
-        // now getting back none
         assert!(result.kvp.is_none());
         assert_eq!(result.remaining_slice, b"Car=\"For a");
-
-        // let kvp = result.kvp.unwrap();
-        // assert_eq!(kvp.key, b"Car");
-        // assert_eq!(kvp.value, b"For a");
-        // assert!(result.remaining_slice.is_empty());
     }
 
     #[test]
@@ -865,14 +836,8 @@ mod prev_kvp_tests {
         let slice = &b"\r\nCar=\"For";
         let result = slice.prev_kvp();
 
-        // now getting back none
         assert!(result.kvp.is_none());
         assert_eq!(result.remaining_slice, b"\r\nCar=\"For");
-
-        // let kvp = result.kvp.unwrap();
-        // assert_eq!(kvp.key, b"Car");
-        // assert_eq!(kvp.value, b"For");  // getting back "\"For". This is _ case.
-        // assert_eq!(result.remaining_slice, b"\r\n");
     }
 
     #[test]
@@ -880,14 +845,8 @@ mod prev_kvp_tests {
         let slice = &b"\rCar=\"";
         let result = slice.prev_kvp();
 
-        // now getting back none
         assert!(result.kvp.is_none());
         assert_eq!(result.remaining_slice, b"\rCar=\"");
-
-        // let kvp = result.kvp.unwrap();
-        // assert_eq!(kvp.key, b"Car");
-        // assert!(kvp.value.is_empty());
-        // assert_eq!(result.remaining_slice, b"\r");
     }
 
     #[test]
