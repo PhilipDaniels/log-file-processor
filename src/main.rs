@@ -98,7 +98,7 @@ fn main() -> Result<(), io::Error> {
     // 0.143    ...plus find the line endings
     // 0.158    ...plus extract_log_date, alternatively...
     // 0.148    ...plus extract_log_date_fast
-    // 0.181    ...plus extract leading KVPs
+    // 0.166    ...plus extract leading KVPs
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;

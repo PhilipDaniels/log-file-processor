@@ -438,8 +438,6 @@ mod leading_kvps_tests {
         }
     }
 
-    // We need a test for where the last thing is not a kvp but just a single word which is not the log level.
-
     #[test]
     pub fn with_prologue_containing_kpvs_returns_kvps() {
         let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] | Message")
@@ -451,16 +449,7 @@ mod leading_kvps_tests {
     }
 
     #[test]
-    pub fn with_prologue_and_no_message_returns_kvps() {
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] |").expect("Parse should succeed");
-        assert_eq!(result.kvps.len(), 2);
-        assert_eq!(result.log_level, b"[INFO_]");
-        assert_eq!(result.kvps.value(b"a"), b"b");
-        assert_eq!(result.kvps.value(b"PID"), b"123");
-    }
-
-    #[test]
-    pub fn with_prologue_and_no_message_returns_kvps2() {
+    pub fn with_prologue_and_no_message_returns_kvps_and_log_level() {
         let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 2);
         assert_eq!(result.log_level, b"[INFO_]", "Log level should be extracted");
@@ -468,17 +457,24 @@ mod leading_kvps_tests {
         assert_eq!(result.kvps.value(b"PID"), b"123");
     }
 
-    // #[test]
-    // pub fn with_prologue_containing_all_well_formed_kpv_types_returns_kvps() {
-    //     //          _123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789_123456789
-    //     let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Message\n| | line2\nFoo=Bar SysRef=AA123456";
-    //     let result = ParsedLine2::new(22, line).expect("Parse should succeed");
-    //     //assert_eq!(result.kvps.len(), 5);
-    //     assert_eq!(result.log_level, b"[INFO_]");
-    //     assert_eq!(result.kvps.value(b"a"), b"Value with space");
-    //     assert_eq!(result.kvps.value(b"PID"), b"123");
-    //     assert_eq!(result.kvps.value(b"foo"), b"Bar");
-    //     assert_eq!(result.kvps.value(b"sysref"), b"AA123456");
-    //     assert_eq!(result.kvps.value(b"empty"), b"");
-    // }
+    #[test]
+    pub fn with_prologue_and_no_message_and_whitespace_returns_kvps_and_log_level() {
+        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]  ").expect("Parse should succeed");
+        assert_eq!(result.kvps.len(), 2);
+        assert_eq!(result.log_level, b"[INFO_]", "Log level should be extracted");
+        assert_eq!(result.kvps.value(b"a"), b"b");
+        assert_eq!(result.kvps.value(b"PID"), b"123");
+    }
+
+    #[test]
+    pub fn with_prologue_containing_all_well_formed_kpv_types_returns_kvps() {
+        let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Message\nFoo=Bar SysRef=AA123456";
+        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        assert_eq!(result.kvps.len(), 3);
+        assert_eq!(result.log_level, b"[INFO_]");
+        assert_eq!(result.kvps.value(b"a"), b"Value with space");
+        assert_eq!(result.kvps.value(b"PID"), b"123");
+        assert_eq!(result.kvps.value(b"empty"), b"");
+        // The \n terminates parsing so Foo and SysRef should not be found.
+    }
 }
