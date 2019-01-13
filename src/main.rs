@@ -98,7 +98,7 @@ fn main() -> Result<(), io::Error> {
     // 0.276    ...plus extract trailing KVPs and message
     // 0.303    ...plus collect everything into one big vector of results
     // 0.444    ...plus sorting everything
-    // 0.400    ...but sorting using Rayon's par_sort is faster
+    // 0.400    ...but sorting using Rayon's par_sort or par_sort_by_key is faster
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -147,20 +147,31 @@ fn main() -> Result<(), io::Error> {
             .flatten()
             .collect();
 
+    // Rust cannot always coerce a reference to an array such as:
+    //      &b""
+    // to a slice. We can force it to by [..]
+    // This should put the errors at the front.
+    all_lines_and_errors.par_sort_by_key(|r| {
+        match r {
+            Ok(ref v) => (v.log_date, v.source, v.line_num),
+            Err(ref e) => (&b""[..], e.source, e.line_num)
+        }
+    });
+
     // Doing this increases the time from 0.3 seconds to 0.35 seconds!
     let total = all_lines_and_errors.len();
     let error_count = all_lines_and_errors.iter().filter(|r| r.is_err()).count();
-    let (mut successes, mut failures): (Vec<_>, Vec<_>) = all_lines_and_errors
-         .into_iter()
-         .partition_map(|r| {
-             match r {
-                 Ok(v) => Either::Left(v),
-                 Err(v) => Either::Right(v),
-             }
-         });
+    // let (mut successes, mut failures): (Vec<_>, Vec<_>) = all_lines_and_errors
+    //      .into_iter()
+    //      .partition_map(|r| {
+    //          match r {
+    //              Ok(v) => Either::Left(v),
+    //              Err(v) => Either::Right(v),
+    //          }
+    //      });
 
-    successes.par_sort_by_key(|a| (a.log_date, a.source, a.line_num));
-    failures.par_sort_by_key(|a| (a.source, a.line_num));
+    // successes.par_sort_by_key(|a| (a.log_date, a.source, a.line_num));
+    // failures.par_sort_by_key(|a| (a.source, a.line_num));
 
     let elapsed = start_time.elapsed();
     println!("Processed {} in {} files in {}.{:03} seconds, ok lines = {}, error lines = {}",
