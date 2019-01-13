@@ -262,8 +262,8 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
 
             let key_slice = &self[key_start_index..=key_end_index];
             let remaining_slice = &self[..key_start_index];
-            println!("  >> extract_key, self={:?}, key={:?}, value={:?}, remaining={:?}",
-                self.to_string(), key_slice.to_string(), value_slice.to_string(), remaining_slice.to_string());
+            //println!("  >> extract_key, self={:?}, key={:?}, value={:?}, remaining={:?}",
+            //    self.to_string(), key_slice.to_string(), value_slice.to_string(), remaining_slice.to_string());
 
             KVPParseResult {
                 remaining_slice: remaining_slice,
@@ -283,12 +283,19 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
                 // Find the previous double quote (trim off the trailing double quote to make it easier).
                 let search_slice = &self[0..self.len() - 1];
                 let index_of_leading_double_quote = search_slice.iter().rposition(|&c| c == b'"');
-                println!("  >> Case quoted, index_of_leading_double_quote = {:?}", index_of_leading_double_quote);
+                //println!("  >> Case quoted, index_of_leading_double_quote = {:?}", index_of_leading_double_quote);
                 if index_of_leading_double_quote.is_none() { return no_kvp };
                 let index_of_leading_double_quote = index_of_leading_double_quote.unwrap();
 
                 let value_slice = &self[index_of_leading_double_quote + 1..self.len() - 1];
-                println!("  >> Case quoted, value_slice = {:?}", value_slice.to_string());
+                //println!("  >> Case quoted, value_slice = {:?}", value_slice.to_string());
+
+                if index_of_leading_double_quote == 0 {
+                    // This is for when self is something like 'A message in quotes"'.
+                    // See test for_quoted_message_only
+                    // There are no actual log lines like this, but it can occur once leading kvps have been trimmed.
+                    return no_kvp;
+                }
 
                 let index_of_equals = index_of_leading_double_quote - 1;
                 // The previous value is expected to be '='.
@@ -668,18 +675,6 @@ mod next_kvp_tests {
     }
 }
 
-/*
-failures:
-    kvp::prev_kvp_tests::for_key_and_unclosed_quote_and_cr
-    kvp::prev_kvp_tests::for_key_and_unclosed_quote_and_remainder
-    kvp::prev_kvp_tests::for_key_and_unclosed_quote_and_remainder2
-    kvp::prev_kvp_tests::for_key_and_unclosed_quote_and_remainder3
-    kvp::prev_kvp_tests::for_key_and_unclosed_quote_and_remainder4
-    kvp::prev_kvp_tests::for_key_and_unclosed_quote_and_whitespace
-    kvp::prev_kvp_tests::for_key_and_unclosed_quote_only
-
-*/
-
 #[cfg(test)]
 mod prev_kvp_tests {
     use super::*;
@@ -957,5 +952,14 @@ mod prev_kvp_tests {
         assert_eq!(kvp.key, b"Car");
         assert_eq!(kvp.value, b"  Ford Fiesta  ");
         assert_eq!(result.remaining_slice, b"REM ");
+    }
+
+    #[test]
+    pub fn for_quoted_message_only() {
+        // This is a pathological case seen in a real log file. Once.
+        let slice = &b"\"Case update sent successfully.\"";
+        let result = slice.prev_kvp();
+        assert!(result.kvp.is_none());
+        assert_eq!(result.remaining_slice.to_vec(), b"\"Case update sent successfully.\"".to_vec());
     }
 }

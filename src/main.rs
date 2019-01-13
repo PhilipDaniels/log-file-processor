@@ -99,6 +99,7 @@ fn main() -> Result<(), io::Error> {
     // 0.158    ...plus extract_log_date, alternatively...
     // 0.148    ...plus extract_log_date_fast
     // 0.166    ...plus extract leading KVPs
+    // 0.276    ...plus extract trailing KVPs
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
