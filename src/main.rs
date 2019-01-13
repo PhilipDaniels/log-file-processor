@@ -14,13 +14,13 @@ mod configuration;
 mod inputs;
 mod kvp;
 mod output;
-mod parsed_line2;
+mod parsed_line;
 mod profiles;
 use crate::arguments::Arguments;
 use crate::profiles::ProfileSet;
 use crate::configuration::{get_config};
 use crate::inputs::{Inputs, InputFile};
-use crate::parsed_line2::{ParsedLine2, ParsedLineError, ParseLineResult};
+use crate::parsed_line::{ParsedLine, ParsedLineError, ParseLineResult};
 
 /* TODOs
 =============================================================================
@@ -159,7 +159,7 @@ fn main() -> Result<(), io::Error> {
 
 /// Returns the Result<T,E> of parsing a line.
 fn parse_line(line_num: usize, line: &[u8]) -> ParseLineResult {
-    ParsedLine2::new(line_num, line)
+    ParsedLine::new(line_num, line)
 }
 
 

@@ -61,7 +61,7 @@ pub struct ParsedLineError<'f> {
 }
 
 #[derive(Debug, Default)]
-pub struct ParsedLine2<'f> {
+pub struct ParsedLine<'f> {
     /// The zero-based line number.
     pub line_num: usize,
 
@@ -74,10 +74,10 @@ pub struct ParsedLine2<'f> {
 }
 
 /// The result of parsing a line is one of these types.
-pub type ParseLineResult<'f> = Result<ParsedLine2<'f>, ParsedLineError<'f>>;
+pub type ParseLineResult<'f> = Result<ParsedLine<'f>, ParsedLineError<'f>>;
 
 
-impl<'f> ParsedLine2<'f> {
+impl<'f> ParsedLine<'f> {
     const LENGTH_OF_LOGGING_TIMESTAMP: usize = 27;
 
     /// Parses a line, returning a struct with all the individual pieces of information.
@@ -87,10 +87,10 @@ impl<'f> ParsedLine2<'f> {
             return Err(ParsedLineError{ line_num, line, message: "Line is empty".to_string()});
         }
 
-        let mut parsed_line = ParsedLine2 { line_num, line, .. ParsedLine2::default() };
+        let mut parsed_line = ParsedLine { line_num, line, .. ParsedLine::default() };
 
         // Extract the log date, splitting the line into two slices - the log date and the remainder.
-        match ParsedLine2::extract_log_date_fast(&line) {
+        match ParsedLine::extract_log_date_fast(&line) {
             Ok((log_date_slice, remainder)) => {
                 parsed_line.log_date = log_date_slice;
                 line = remainder;
@@ -137,19 +137,19 @@ impl<'f> ParsedLine2<'f> {
     }
 
     fn extract_log_date_fast(line: &[u8]) -> Result<(&[u8],&[u8]), String> {
-        if line.len() < ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP {
-            let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP);
+        if line.len() < ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP {
+            let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP);
             Err(msg)
         } else {
-            Ok(line.split_at(ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP))
+            Ok(line.split_at(ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP))
         }
     }
 
     /// Extracts the log date from the message. We expect this to occur at the beginning of the message
     /// and to have a specific number of characters.
     fn extract_log_date(line: &[u8]) -> Result<(&[u8],&[u8]), String> {
-        if line.len() < ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP {
-            let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP);
+        if line.len() < ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP {
+            let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP);
             return Err(msg);
         }
 
@@ -207,7 +207,7 @@ impl<'f> ParsedLine2<'f> {
         //     Ok(fraction_end)
         // }
 
-        Ok(line.split_at(ParsedLine2::LENGTH_OF_LOGGING_TIMESTAMP))
+        Ok(line.split_at(ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP))
     }
 }
 
@@ -217,7 +217,7 @@ mod white_space_tests {
 
     #[test]
     fn blank_line_returns_error() {
-        let result = ParsedLine2::new(22, b"");
+        let result = ParsedLine::new(22, b"");
         match result {
             Err(ref e) if e.message == "Line is empty" => assert_eq!(e.line_num, 22, "We expect the line number to be set"),
             _ => assert!(false, "Unexpected result"),
@@ -226,7 +226,7 @@ mod white_space_tests {
 
     #[test]
     fn whitespace_line_returns_error() {
-        let result = ParsedLine2::new(22, b"  \r  ");
+        let result = ParsedLine::new(22, b"  \r  ");
         match result {
             Err(ref e) if e.message == "Line is empty" => assert_eq!(e.line_num, 22, "We expect the line number to be set"),
             _ => assert!(false, "Unexpected result"),
@@ -235,7 +235,7 @@ mod white_space_tests {
 
     #[test]
     fn trims_whitespace_from_both_ends() {
-        let result = ParsedLine2::new(0, b"  \r\n 2018-09-26 12:34:56.1146655 | MachineName=Some.machine.net | Message\r\n   ")
+        let result = ParsedLine::new(0, b"  \r\n 2018-09-26 12:34:56.1146655 | MachineName=Some.machine.net | Message\r\n   ")
             .expect("Parse should succeed");
         assert_eq!(result.line.to_vec(), b"2018-09-26 12:34:56.1146655 | MachineName=Some.machine.net | Message".to_vec());
     }
@@ -247,7 +247,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn short_line_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-12");
+        let result = ParsedLine::extract_log_date(b"2018-12");
         match result {
             Err(ref msg) if msg.contains("logging timestamp") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -256,7 +256,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_y1_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"x018-09-26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"x018-09-26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 0") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -265,7 +265,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_y2_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2x18-09-26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"2x18-09-26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 1") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -274,7 +274,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_y3_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"20x8-09-26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"20x8-09-26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 2") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -283,7 +283,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_y4_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"201x-09-26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"201x-09-26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 3") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -292,7 +292,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_sep1_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018x09-26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"2018x09-26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 4") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -301,7 +301,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_mon1_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-x9-26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-x9-26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 5") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -310,7 +310,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_mon2_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-0x-26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-0x-26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 6") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -319,7 +319,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_sep2_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09x26 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09x26 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 7") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -328,7 +328,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_d1_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-x6 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-x6 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 8") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -337,7 +337,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_d2_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-2x 12:34:56.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-2x 12:34:56.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 9") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -346,7 +346,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_sep3_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26x23:00:00.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26x23:00:00.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 10") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -355,7 +355,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_h1_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 x3:00:00.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 x3:00:00.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 11") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -364,7 +364,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_h2_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 2x:00:00.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 2x:00:00.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 12") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -373,7 +373,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_sep4_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 23x00:00.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 23x00:00.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 13") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -382,7 +382,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_min1_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 23:x0:00.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 23:x0:00.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 14") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -391,7 +391,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_min2_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 23:0x:00.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 23:0x:00.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 15") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -400,7 +400,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_sep5_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 23:00x00.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 23:00x00.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 16") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -409,7 +409,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_s1_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 23:00:x0.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 23:00:x0.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 17") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -418,7 +418,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_s2_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 23:00:0x.7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 23:00:0x.7654321");
         match result {
             Err(ref msg) if msg.contains("Character 18") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -427,7 +427,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_invalid_sep6_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 23:00:00x7654321");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 23:00:00x7654321");
         match result {
             Err(ref msg) if msg.contains("Character 19") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -436,7 +436,7 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_no_fractions_returns_error() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 12:34:56. | some mesage to make the line longer enough");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 12:34:56. | some mesage to make the line longer enough");
         match result {
             Err(ref msg) if msg.contains("Character 20") => assert!(true),
             _ => assert!(false, "Unexpected result"),
@@ -445,32 +445,32 @@ mod extract_log_date_tests {
 
     #[test]
     fn with_only_log_date_extracts_log_date() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 12:34:56.1146655").expect("Parse should succeed");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 12:34:56.1146655").expect("Parse should succeed");
         assert_eq!(result.0, b"2018-09-26 12:34:56.1146655");
     }
 
     #[test]
     fn with_only_log_date_and_whitespace_extracts_log_date() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 12:34:56.1146655 ").expect("Parse should succeed");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 12:34:56.1146655 ").expect("Parse should succeed");
         assert_eq!(result.0, b"2018-09-26 12:34:56.1146655");
     }
 
     #[test]
     fn with_nominal_line_extracts_log_date() {
-        let result = ParsedLine2::extract_log_date(b"2018-09-26 12:34:56.1146655 | MachineName=foo | Message").expect("Parse should succeed");
+        let result = ParsedLine::extract_log_date(b"2018-09-26 12:34:56.1146655 | MachineName=foo | Message").expect("Parse should succeed");
         assert_eq!(result.0, b"2018-09-26 12:34:56.1146655");
     }
 
     // These were supported under the old parser, but not the new one.
     // #[test]
     // fn with_longer_precision_extracts_log_date() {
-    //     let result = ParsedLine2::extract_log_date(b"2018-09-26 12:34:56.12345678901 | MachineName=foo | Message").expect("Parse should succeed");
+    //     let result = ParsedLine::extract_log_date(b"2018-09-26 12:34:56.12345678901 | MachineName=foo | Message").expect("Parse should succeed");
     //     assert_eq!(result.0, b"2018-09-26 12:34:56.12345678901");
     // }
 
     // #[test]
     // fn with_shorter_precision_extracts_log_date() {
-    //     let result = ParsedLine2::extract_log_date(b"2018-09-26 12:34:56.1234 | MachineName=foo | Message").expect("Parse should succeed");
+    //     let result = ParsedLine::extract_log_date(b"2018-09-26 12:34:56.1234 | MachineName=foo | Message").expect("Parse should succeed");
     //     assert_eq!(result.0, b"2018-09-26 12:34:56.1234");
     // }
 }
@@ -481,13 +481,13 @@ mod leading_kvps_tests {
 
     #[test]
     pub fn for_succcessful_parse_sets_line_number() {
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321").expect("Parse should succeed");
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.7654321").expect("Parse should succeed");
         assert_eq!(result.line_num, 22);
     }
 
     #[test]
     pub fn with_empty_prologue_returns_empty_kvps_and_empty_log_level() {
-        let result = ParsedLine2::new(0, b"2018-09-26 12:34:56.7654321").expect("Parse should succeed");
+        let result = ParsedLine::new(0, b"2018-09-26 12:34:56.7654321").expect("Parse should succeed");
         assert!(result.kvps.is_empty());
         assert!(result.log_level.is_empty())
     }
@@ -496,14 +496,14 @@ mod leading_kvps_tests {
     pub fn with_prologue_containing_log_level_returns_appropriate_log_level() {
         for log_level in &kvp::LOG_LEVELS {
             let line = format!("2018-09-26 12:34:56.7654321 | a=b | {} | Message", String::from_utf8(log_level.to_vec()).unwrap());
-            let result = ParsedLine2::new(0, line.as_bytes()).expect("Parse should succeed");
+            let result = ParsedLine::new(0, line.as_bytes()).expect("Parse should succeed");
             assert_eq!(result.log_level, &log_level[0..log_level.len()]);
         }
     }
 
     #[test]
     pub fn with_prologue_containing_kpvs_returns_kvps() {
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] | Message")
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_] | Message")
             .expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 2);
         assert_eq!(result.log_level, b"[INFO_]");
@@ -513,7 +513,7 @@ mod leading_kvps_tests {
 
     #[test]
     pub fn with_prologue_and_no_message_returns_kvps_and_log_level() {
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]").expect("Parse should succeed");
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 2);
         assert_eq!(result.log_level, b"[INFO_]", "Log level should be extracted");
         assert_eq!(result.kvps.value(b"a"), b"b");
@@ -522,7 +522,7 @@ mod leading_kvps_tests {
 
     #[test]
     pub fn with_prologue_and_no_message_and_whitespace_returns_kvps_and_log_level() {
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]  ").expect("Parse should succeed");
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.7654321 | a=b | pid=123 | [INFO_]  ").expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 2);
         assert_eq!(result.log_level, b"[INFO_]", "Log level should be extracted");
         assert_eq!(result.kvps.value(b"a"), b"b");
@@ -532,7 +532,7 @@ mod leading_kvps_tests {
     #[test]
     pub fn with_prologue_containing_all_well_formed_kpv_types_returns_kvps() {
         let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Message\nFoo=Bar SysRef=AA123456 whatever";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 3);
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.kvps.value(b"a"), b"Value with space");
@@ -549,7 +549,7 @@ mod trailing_kvps_tests {
     #[test]
     pub fn with_trailing_kvp_no_value() {
         let line = b"2018-09-26 12:34:56.7654321 | [INFO_] | Message SysRef=";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 1);
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.kvps.value(b"SysRef"), b"");
@@ -558,7 +558,7 @@ mod trailing_kvps_tests {
     #[test]
     pub fn with_trailing_kvp_standard_value() {
         let line = b"2018-09-26 12:34:56.7654321 | [INFO_] | Message SysRef=AA123456";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 1);
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.kvps.value(b"SysRef"), b"AA123456");
@@ -567,7 +567,7 @@ mod trailing_kvps_tests {
     #[test]
     pub fn with_trailing_kvp_quoted_value() {
         let line = b"2018-09-26 12:34:56.7654321 | [INFO_] | Message SysRef=\"It's like AA123456\"";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 1);
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.kvps.value(b"SysRef"), b"It's like AA123456");
@@ -576,7 +576,7 @@ mod trailing_kvps_tests {
     #[test]
     pub fn with_multiple_trailing_kvps_returns_kvps() {
         let line = b"2018-09-26 12:34:56.7654321 | [INFO_] | Message Foo=Bar Hit= Http.Request=http:/www.foo.com SysRef=\"It's like AA123456\"";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 4);
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.kvps.value(b"SysRef"), b"It's like AA123456");
@@ -590,7 +590,7 @@ mod trailing_kvps_tests {
         // Stripping of the newlines will occur when we write the CSV, so
         // it is OK for them to remain at this point.
         let line = b"2018-09-26 12:34:56.7654321 | [INFO_] | Message Foo=\"Bar\nBar2\nBar3\" Hit= Http.Request=http:/www.foo.com";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.kvps.len(), 3);
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.kvps.value(b"foo"), b"Bar\nBar2\nBar3");
@@ -606,38 +606,38 @@ mod message_extraction_tests {
 
     #[test]
     fn with_incomplete_prologue_sets_message_to_empty() {
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.1146655").expect("Parse should succeed");
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.1146655").expect("Parse should succeed");
         assert_eq!(result.message, b"");
     }
 
     #[test]
     fn with_no_message_sets_message_to_empty() {
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.1146655 | pid=12 |").expect("Parse should succeed");
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.1146655 | pid=12 |").expect("Parse should succeed");
         assert_eq!(result.message, b"");
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.1146655 | pid=12").expect("Parse should succeed");
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.1146655 | pid=12").expect("Parse should succeed");
         assert_eq!(result.message, b"");
-        let result = ParsedLine2::new(22, b"2018-09-26 12:34:56.1146655 | pid=12 |   ").expect("Parse should succeed");
+        let result = ParsedLine::new(22, b"2018-09-26 12:34:56.1146655 | pid=12 |   ").expect("Parse should succeed");
         assert_eq!(result.message, b"");
     }
 
     #[test]
     pub fn with_no_trailing_kvps() {
         let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Some long message";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.message, b"Some long message");
     }
 
     #[test]
     pub fn with_leading_and_trailing_whitespace() {
         let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] |    Some long message   \r\n";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.message, b"Some long message");
     }
 
     #[test]
     pub fn with_message_with_newlines_extracts_message() {
         let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Message\n| | line2\nFoo=Bar SysRef=AA123456";
-        let result = ParsedLine2::new(22, line).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line).expect("Parse should succeed");
         assert_eq!(result.message, b"Message\n| | line2");
     }
 }
@@ -653,7 +653,7 @@ mod real_log_line_tests {
         line.push_str("\n SourceInfo=\"Something.Something.DarkSide.Aggregation.AggregateCapacityGenerator, Something.Something.DarkSide v1.0.0\"");
         line.push_str("\n SourceInstance=38449385");
 
-        let result = ParsedLine2::new(22, line.as_bytes()).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-09-26 12:34:56.1146655");
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.message.to_vec(), b"Running aggregate capacity generator.".to_vec());
@@ -684,7 +684,7 @@ mod real_log_line_tests {
         line.push_str("\n SourceInfo=\"What.Ever.Another.Service.SurveyorCapacityService, Blah.Blah.Blah.Services v1.11.18213.509\"");
         line.push_str("\n SourceInstance=855390 startDate=28/09/2018 endDate=11/10/2018 postcode=\"MK16 8QF\"");
 
-        let result = ParsedLine2::new(22, line.as_bytes()).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-09-27 11:29:51.0680203");
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.message, message.as_bytes());
@@ -730,7 +730,7 @@ mod real_log_line_tests {
         line.push_str("\n SourceInfo=\"Blah.Blah.Blah.IISHost.Api.OurController, Blah.Blah.Blah.IISHost v1.12.18323.4\"");
         line.push_str("\n SourceInstance=35519589 startDate=28/11/2018 endDate=04/12/2018 sysref=QU090700");
 
-        let result = ParsedLine2::new(22, line.as_bytes()).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-11-27 10:33:37.2324929");
         assert_eq!(result.log_level, b"[ERROR]");
         assert_eq!(result.message, (&message[1..]).as_bytes());  // This message has an extra leading space, we need to trim it for the test.
@@ -759,7 +759,7 @@ mod real_log_line_tests {
         line.push_str("\n Total surveyors: 577");
         line.push_str("\n Total surveyors matching criteria: 577\"");
 
-        let result = ParsedLine2::new(22, line.as_bytes()).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-11-27 10:33:37.2324929");
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.message, b"Some irrelevant message");
@@ -783,7 +783,7 @@ mod real_log_line_tests {
         line.push_str("\n SourceInfo=\"Some.UnityThing.ContainerBuilder, Some.UnityThing v1.12.18333.11642\" SourceInstance=61115925");
         line.push_str("\n AssemblyFile=C:\\Users\\pdaniels\\AppData\\Local\\Temp\\Whatever-201802-03-1434124214.3324\\Something.Database.dll");
 
-        let result = ParsedLine2::new(22, line.as_bytes()).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-12-03 14:42:48.1783541");
         assert_eq!(result.log_level, b"[VRBSE]");
         assert_eq!(result.message.to_vec(), b"Attempting to load assembly C:\\Users\\pdaniels\\AppData\\Local\\Temp\\Whatever-201802-03-1434124214.3324\\Something.Database.dll".to_vec());
@@ -820,7 +820,7 @@ mod real_log_line_tests {
         line.push_str("\n targetId=PD123456");
         line.push_str("\n targetType=Case");
 
-        let result = ParsedLine2::new(22, line.as_bytes()).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-06-27 12:40:02.8554336");
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.message.to_vec(), b"Successfully retrived 20 number of audit items for target id PD123456 and targetType Case".to_vec());
@@ -871,7 +871,7 @@ mod real_log_line_tests {
         line.push_str("\n some words \"");
         line.push_str("\n SysRef=QU076868");
 
-        let result = ParsedLine2::new(22, line.as_bytes()).expect("Parse should succeed");
+        let result = ParsedLine::new(22, line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-06-27 12:32:00.6811879");
         assert_eq!(result.log_level, b"[INFO_]");
         assert_eq!(result.message, message.as_bytes());
