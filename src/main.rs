@@ -25,7 +25,8 @@ use crate::parsed_line::{ParsedLine, ParseLineResult};
 =============================================================================
 [ ] If a column is not in KVPs, attempt to extract from the message.
 [ ] Are alternate column names working?
-
+[ ] If line contains KVPs which are not in the column list then they are stripped off.
+    Should we make the message everything from the prologue to the end of the line?
 [ ] Perf: Figure out how to do profiling.
 [ ] Perf: Is it faster to write everything to RAM first? We could parallelize that.
 [ ] Tools: figure out how to run rustfmt in VS Code.
