@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fs::{File, read, write, remove_file};
 use std::time::Instant;
 use std::io::{self, Write};
@@ -100,6 +101,7 @@ fn main() -> Result<(), io::Error> {
     // 0.400    ...but sorting using Rayon's par_sort or par_sort_by_key is faster
     // 0.985    ...writing main fields with single-threaded '\r' checking (direct to file)
     // 1.506    ...writing main fields and kvps with single-threaded '\r' checking (direct to file)
+    // 1.308    ...writing main fields and kvps with multi-threaded '\r' checking (direct to file)
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -255,7 +257,7 @@ fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, l
             kvp::LOG_DATE => writer.write_field(line.log_date)?,
             kvp::LOG_LEVEL => writer.write_field(line.log_level)?,
             kvp::LOG_SOURCE => writer.write_field(line.source)?,
-            kvp::MESSAGE => write_filtered_string(writer, line.message)?,
+            kvp::MESSAGE => write_cow(writer, &line.message)?,
             _ => {
                 if let Some(kvp_value) = line.kvps.get_value(column.as_bytes()) {
                     write_filtered_string(writer, kvp_value)?;
@@ -281,4 +283,13 @@ fn write_filtered_string(writer: &mut csv::Writer<std::fs::File>, s: &[u8]) -> R
     } else {
         writer.write_field(s)
     }
+}
+
+fn write_cow<'f>(writer: &mut csv::Writer<std::fs::File>, data: &Cow<'f, [u8]>) -> Result<(), csv::Error> {
+    match data {
+        Cow::Borrowed(slice) => writer.write_field(slice)?,
+        Cow::Owned(safe_string) => writer.write_field(safe_string)?,
+    };
+
+    Ok(())
 }

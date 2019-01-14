@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
 use crate::kvp::{self, KVPCollection, ByteSliceKvpExtensions};
 
@@ -87,12 +88,21 @@ pub struct ParsedLine<'f> {
 
     pub log_level: &'f [u8],
     pub kvps: KVPCollection<'f>,
-    pub message: &'f [u8],
+    pub message: Cow<'f, [u8]>,
 }
 
 /// The result of parsing a line is one of these types.
 pub type ParseLineResult<'f> = Result<ParsedLine<'f>, ParsedLineError<'f>>;
 
+#[inline]
+fn make_slice_safe(slice: &[u8]) -> Cow<[u8]> {
+    if slice.contains(&b'\r') {
+        let safe_line: Vec<_> = slice.iter().map(|&c| if c == b'\r' { b' ' } else { c }).collect();
+        safe_line.into()
+    } else {
+        slice.into()
+    }
+}
 
 impl<'f> ParsedLine<'f> {
     const LENGTH_OF_LOGGING_TIMESTAMP: usize = 27;
@@ -149,7 +159,9 @@ impl<'f> ParsedLine<'f> {
             }
         }
 
-        parsed_line.message = line.trim_right_while(ByteExtensions::is_whitespace);
+        let line = line.trim_right_while(ByteExtensions::is_whitespace);
+        parsed_line.message = make_slice_safe(&line);
+
         Ok(parsed_line)
     }
 
