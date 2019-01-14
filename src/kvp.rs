@@ -40,8 +40,7 @@ pub struct KVP<'f> {
     pub key: &'f [u8],
 
     /// The value of the KVP. Can be empty, in the case of expressions like 'SysRef='.
-    //pub value: Cow<'f, [u8]>,
-    pub value: &'f [u8],
+    pub value: Cow<'f, [u8]>,
 
     /// It turns out to be handy to handle the log level field as a special case of
     /// a KVP, it makes parsing easier.
@@ -50,12 +49,15 @@ pub struct KVP<'f> {
 
 impl<'f> KVP<'f> {
     fn new(key: &'f [u8], value: &'f [u8]) -> Self {
-        KVP { key, value, is_log_level: false }
+        KVP {
+            key: key,
+            value: value.make_safe(),
+            is_log_level: false
+        }
     }
 }
 
 /// A Vec is probably as fast as a HashMap for the small number of KVPs we expect to see.
-//#[derive(Debug, Default)]
 #[derive(Debug, Default)]
 pub struct KVPCollection<'f> {
     kvps: Vec<KVP<'f>>
@@ -75,10 +77,10 @@ impl<'f> KVPCollection<'f> {
 
     /// Gets a value, looking it up case-insensitively by the specified key.
     /// Returns None if there is no value for that key.
-    pub fn get_value(&self, key: &[u8]) -> Option<&[u8]> {
+    pub fn get_value(&self, key: &[u8]) -> Option<&Cow<'f, [u8]>> {
         for kvp in &self.kvps {
             if kvp.key.eq_ignore_ascii_case(key) {
-                return Some(kvp.value);
+                return Some(&kvp.value);
             }
         }
 

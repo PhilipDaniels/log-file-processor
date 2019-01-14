@@ -1,6 +1,5 @@
 use std::collections::{HashMap};
 use regex::{Regex, RegexBuilder};
-
 use crate::arguments::Arguments;
 use crate::profiles::{Profile, ProfileSet, vec_add_entry};
 

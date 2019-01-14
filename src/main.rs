@@ -24,21 +24,20 @@ use crate::parsed_line::{ParsedLine, ParseLineResult};
 
 /* TODOs
 =============================================================================
-[O] If a column is not in KVPs, attempt to extract from the message.
-[ ] I had to change make_output_record return type from "&'p str" to String. Can it be a Cow instead?
-    Problem is the CSV writer cannot handle it.
-[ ] If column is a date/datetime, attempt to reformat the raw string.
-    Use Chrono for DateTimes. https://rust-lang-nursery.github.io/rust-cookbook/datetime/parse.html#parse-string-into-datetime-struct
-[ ] Sort (the contents of) the output files.
-[ ] Perf: Test inlining performance.
-[ ] Perf: More parallelism while processing an individual file.
+[ ] If a column is not in KVPs, attempt to extract from the message.
+[ ] Are alternate column names working?
+
+[ ] Perf: Figure out how to do profiling.
+[ ] Tools: figure out how to run rustfmt in VS Code.
+[ ] Tools: figure out how to run clippy in VS Code
+
 [ ] Allow custom regex extractors for columns.
 [ ] Filter: from/to dates
 [ ] Filter: sysref
 [ ] Filter: column is non-blank, e.g. for call recorder execution time
 [ ] Filter: column matches a regex, ANY column matches a regex. DOES NOT MATCH, e.g. to get rid of heartbeats.
-[ ] Bug: we have some bad parsing in some files. It might just be because I have corrupted the file with an editor.
-       Need to get the original files again.
+
+[ ] Rewrite using nom!
 */
 
 fn main() -> Result<(), io::Error> {
@@ -101,7 +100,8 @@ fn main() -> Result<(), io::Error> {
     // 0.400    ...but sorting using Rayon's par_sort or par_sort_by_key is faster
     // 0.985    ...writing main fields with single-threaded '\r' checking (direct to file)
     // 1.506    ...writing main fields and kvps with single-threaded '\r' checking (direct to file)
-    // 1.308    ...writing main fields and kvps with multi-threaded '\r' checking (direct to file)
+    // 1.231    ...writing main fields and kvps with multi-threaded '\r' checking using Cow's (direct to file)
+    // inlining all the ByteSliceExtensions makes no difference to the speed
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -260,7 +260,8 @@ fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, l
             kvp::MESSAGE => write_cow(writer, &line.message)?,
             _ => {
                 if let Some(kvp_value) = line.kvps.get_value(column.as_bytes()) {
-                    write_filtered_string(writer, kvp_value)?;
+                    write_cow(writer, kvp_value)?;
+                    //write_filtered_string(writer, kvp_value)?;
                 } else {
                     writer.write_field(b"")?;
                 }
