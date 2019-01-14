@@ -1,8 +1,8 @@
 use std::borrow::Cow;
-use std::fs::{File, read, write, remove_file};
+use std::fs::{File, read, remove_file};
 use std::time::Instant;
-use std::io::{self, Write};
-use csv::{Writer, WriterBuilder};
+use std::io;
+use csv::{WriterBuilder};
 use indicatif::{HumanBytes};
 use itertools::Itertools;
 use structopt::StructOpt;

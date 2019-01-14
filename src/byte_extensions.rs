@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 pub trait ByteExtensions {
     fn is_whitespace(self) -> bool;
     fn is_whitespace_or_pipe(self) -> bool;
@@ -22,72 +24,92 @@ impl ByteExtensions for u8 {
 }
 
 pub trait ByteSliceExtensions {
-    fn trim_left(self) -> Self;
+    fn trim_left(&self) -> &Self;
 
-    fn trim_right(self) -> Self;
+    fn trim_right(&self) -> &Self;
 
-    fn trim_left_while<P>(self, pred: P) -> Self
+    fn trim_left_while<P>(&self, pred: P) -> &Self
         where P: Fn(u8) -> bool;
 
-    fn trim_right_while<P>(self, pred: P) -> Self
+    fn trim_right_while<P>(&self, pred: P) -> &Self
         where P: Fn(u8) -> bool;
 
-    fn trim_while<P>(self, pred: P) -> Self
+    fn trim_while<P>(&self, pred: P) -> &Self
         where P: Fn(u8) -> bool;
 
-    fn to_string(self) -> String;
+    fn to_string(&self) -> String;
+
+    /// Makes the slice safe to write to CSV by checking for any embedded '\r' characters
+    /// and replacing them with a space. Uses a Cow to avoid allocaions in most cases.
+    fn make_safe<'f>(&'f self) -> Cow<'f, [u8]>;
+        // TODO: should be where T: std::clone::Clone, and Self is [T]
 }
 
-impl<'s> ByteSliceExtensions for &'s [u8] {
+impl ByteSliceExtensions for [u8] {
     /// Trims one character from the left of the slice, unless the slice
     /// is empty in which case the empty slice is returned.
-    fn trim_left(self) -> Self
+    fn trim_left(&self) -> &Self
     {
         if self.is_empty() { self } else { &self[1..] }
     }
 
     /// Trims one character from the right of the slice, unless the slice
     /// is empty in which case the empty slice is returned.
-    fn trim_right(self) -> Self
+    fn trim_right(&self) -> &Self
     {
         if self.is_empty() { self } else { &self[0..self.len() - 1] }
     }
 
     /// Trims characters from the left of the slice while the predicate returns true,
     /// or until the slice is empty.
-    fn trim_left_while<P>(mut self, pred: P) -> Self
+    fn trim_left_while<P>(&self, pred: P) -> &Self
         where P: Fn(u8) -> bool
     {
-        while !self.is_empty() && pred(self[0]) {
-            self = &self[1..];
+        let mut t = self;
+        while !t.is_empty() && pred(t[0]) {
+            t = &t[1..];
         }
 
-        self
+        t
     }
 
     /// Trims characters from the right of the slice while the predicate returns true,
     /// or until the slice is empty.
-    fn trim_right_while<P>(mut self, pred: P) -> Self
+    fn trim_right_while<P>(&self, pred: P) -> &Self
         where P: Fn(u8) -> bool
     {
-        while !self.is_empty() && pred(self[self.len() - 1]) {
-            self = &self[..self.len() - 1];
+        let mut t = self;
+
+        while !t.is_empty() && pred(t[t.len() - 1]) {
+            t = &t[..t.len() - 1];
         }
 
-        self
+        t
     }
 
     /// Trims characters from both the left and right of the slice while the predicate
     /// returns true, or until the slice is empty.
-    fn trim_while<P>(self, pred: P) -> Self
+    fn trim_while<P>(&self, pred: P) -> &Self
         where P: Fn(u8) -> bool
     {
-        self.trim_left_while(&pred).trim_right_while(pred)
+        let s = self.trim_left_while(&pred);
+        s.trim_right_while(pred)
     }
 
     /// Convert to a string, to help with debugging and testing.
-    fn to_string(self) -> String {
+    fn to_string(&self) -> String {
         String::from_utf8(self.to_vec()).unwrap()
+    }
+
+    /// Makes the slice safe to write to CSV by checking for any embedded '\r' characters
+    /// and replacing them with a space. Uses a Cow to avoid allocaions in most cases.
+    fn make_safe<'f>(&'f self) -> Cow<'f, [u8]> {
+        if self.contains(&b'\r') {
+            let safe: Vec<_> = self.iter().map(|&c| if c == b'\r' { b' ' } else { c }).collect();
+            safe.into()
+        } else {
+            self.into()
+        }
     }
 }
 

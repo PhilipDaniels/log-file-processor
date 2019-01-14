@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
 
 /// This module contains the representation of a Key-Value pair as parsed from the original line,
@@ -39,6 +40,7 @@ pub struct KVP<'f> {
     pub key: &'f [u8],
 
     /// The value of the KVP. Can be empty, in the case of expressions like 'SysRef='.
+    //pub value: Cow<'f, [u8]>,
     pub value: &'f [u8],
 
     /// It turns out to be handy to handle the log level field as a special case of
