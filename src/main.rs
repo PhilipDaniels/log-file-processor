@@ -98,8 +98,8 @@ fn main() -> Result<(), io::Error> {
     // 0.303    ...plus collect everything into one big vector of results
     // 0.444    ...plus sorting everything
     // 0.400    ...but sorting using Rayon's par_sort or par_sort_by_key is faster
-    // 0.985    ...writing main fields with filtering
-    // 1.506    ...writing main fields and kvps with filtering
+    // 0.985    ...writing main fields with single-threaded '\r' checking (direct to file)
+    // 1.506    ...writing main fields and kvps with single-threaded '\r' checking (direct to file)
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -256,13 +256,13 @@ fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, l
             kvp::LOG_LEVEL => writer.write_field(line.log_level)?,
             kvp::LOG_SOURCE => writer.write_field(line.source)?,
             kvp::MESSAGE => write_filtered_string(writer, line.message)?,
-            _ => { },
-            //     if let Some(kvp_value) = line.kvps.get_value(column.as_bytes()) {
-            //         write_filtered_string(writer, kvp_value)?;
-            //     } else {
-            //         writer.write_field(b"")?;
-            //     }
-            // }
+            _ => {
+                if let Some(kvp_value) = line.kvps.get_value(column.as_bytes()) {
+                    write_filtered_string(writer, kvp_value)?;
+                } else {
+                    writer.write_field(b"")?;
+                }
+            }
         }
     }
 
