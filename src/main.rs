@@ -1,5 +1,4 @@
-use std::borrow::Cow;
-use std::fs::{File, read, remove_file};
+use std::fs::{self, File};
 use std::time::Instant;
 use std::io;
 use csv::{WriterBuilder};
@@ -28,6 +27,7 @@ use crate::parsed_line::{ParsedLine, ParseLineResult};
 [ ] Are alternate column names working?
 
 [ ] Perf: Figure out how to do profiling.
+[ ] Perf: Is it faster to write everything to RAM first? We could parallelize that.
 [ ] Tools: figure out how to run rustfmt in VS Code.
 [ ] Tools: figure out how to run clippy in VS Code
 
@@ -38,6 +38,8 @@ use crate::parsed_line::{ParsedLine, ParseLineResult};
 [ ] Filter: column matches a regex, ANY column matches a regex. DOES NOT MATCH, e.g. to get rid of heartbeats.
 
 [ ] Rewrite using nom!
+[ ] Write some macros to help with the ugliness of the tests
+[ ] Get a better assertions library
 */
 
 fn main() -> Result<(), io::Error> {
@@ -111,7 +113,7 @@ fn main() -> Result<(), io::Error> {
     // want to collect a consolidated set of parsed line (over all the files).
     // The bytes of the files must therefore outlive all the parsed lines.
     let all_files: Vec<(&InputFile, Vec<u8>)> = inputs.files.par_iter()
-        .map(|f| (f, read(&f.path).expect("Can read file")))
+        .map(|f| (f, fs::read(&f.path).expect("Can read file")))
         .collect();
 
     // Process all files in parallel. Accumulate the lines written for each file so
@@ -223,9 +225,7 @@ fn write_output_files(config: &Configuration, results: &[ParseLineResult]) -> Re
 
     for result in results {
         match result {
-            Ok(parsed_line) => {
-                write_line(config, &mut success_writer, parsed_line)?;
-            },
+            Ok(parsed_line) => write_line(config, &mut success_writer, parsed_line)?,
             Err(parsed_line_error) => {
                 error_writer.write_field(parsed_line_error.source)?;
                 error_writer.write_field(parsed_line_error.line_num.to_string())?;
@@ -237,14 +237,12 @@ fn write_output_files(config: &Configuration, results: &[ParseLineResult]) -> Re
         }
     }
 
-    //error_count += 1;
-
     success_writer.flush()?;
     error_writer.flush()?;
 
     // Did we need this file?
     if error_count == 0 {
-        remove_file(ERROR_FILE)?;
+        fs::remove_file(ERROR_FILE)?;
     }
 
     Ok(error_count)
@@ -257,11 +255,10 @@ fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, l
             kvp::LOG_DATE => writer.write_field(line.log_date)?,
             kvp::LOG_LEVEL => writer.write_field(line.log_level)?,
             kvp::LOG_SOURCE => writer.write_field(line.source)?,
-            kvp::MESSAGE => write_cow(writer, &line.message)?,
+            kvp::MESSAGE => writer.write_field(&line.message)?,
             _ => {
                 if let Some(kvp_value) = line.kvps.get_value(column.as_bytes()) {
-                    write_cow(writer, kvp_value)?;
-                    //write_filtered_string(writer, kvp_value)?;
+                    writer.write_field(&kvp_value)?;
                 } else {
                     writer.write_field(b"")?;
                 }
@@ -270,27 +267,6 @@ fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, l
     }
 
     writer.write_record(&EMPTY)?;
-
-    Ok(())
-}
-
-fn write_filtered_string(writer: &mut csv::Writer<std::fs::File>, s: &[u8]) -> Result<(), csv::Error> {
-    // Annoying the CSV cannot handle this for us.
-    let is_cr = |c| c == b'\r' || c == b'\n';
-
-    if s.iter().any(|&c| is_cr(c)) {
-        let safe_s: Vec<_> = s.iter().filter_map(|&c| if is_cr(c) { None } else { Some(c) }).collect();
-        writer.write_field(safe_s)
-    } else {
-        writer.write_field(s)
-    }
-}
-
-fn write_cow<'f>(writer: &mut csv::Writer<std::fs::File>, data: &Cow<'f, [u8]>) -> Result<(), csv::Error> {
-    match data {
-        Cow::Borrowed(slice) => writer.write_field(slice)?,
-        Cow::Owned(safe_string) => writer.write_field(safe_string)?,
-    };
 
     Ok(())
 }

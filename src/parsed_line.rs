@@ -618,38 +618,38 @@ mod message_extraction_tests {
     #[test]
     fn with_incomplete_prologue_sets_message_to_empty() {
         let result = ParsedLine::new(b"2018-09-26 12:34:56.1146655").expect("Parse should succeed");
-        assert_eq!(result.message, b"");
+        assert_eq!(result.message.as_ref(), b"");
     }
 
     #[test]
     fn with_no_message_sets_message_to_empty() {
         let result = ParsedLine::new(b"2018-09-26 12:34:56.1146655 | pid=12 |").expect("Parse should succeed");
-        assert_eq!(result.message, b"");
+        assert_eq!(result.message.as_ref(), b"");
         let result = ParsedLine::new(b"2018-09-26 12:34:56.1146655 | pid=12").expect("Parse should succeed");
-        assert_eq!(result.message, b"");
+        assert_eq!(result.message.as_ref(), b"");
         let result = ParsedLine::new(b"2018-09-26 12:34:56.1146655 | pid=12 |   ").expect("Parse should succeed");
-        assert_eq!(result.message, b"");
+        assert_eq!(result.message.as_ref(), b"");
     }
 
     #[test]
     pub fn with_no_trailing_kvps() {
         let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Some long message";
         let result = ParsedLine::new(line).expect("Parse should succeed");
-        assert_eq!(result.message, b"Some long message");
+        assert_eq!(result.message.as_ref(), b"Some long message");
     }
 
     #[test]
     pub fn with_leading_and_trailing_whitespace() {
         let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] |    Some long message   \r\n";
         let result = ParsedLine::new(line).expect("Parse should succeed");
-        assert_eq!(result.message, b"Some long message");
+        assert_eq!(result.message.as_ref(), b"Some long message");
     }
 
     #[test]
     pub fn with_message_with_newlines_extracts_message() {
         let line = b"2018-09-26 12:34:56.7654321 | a=\"Value with space\" | pid=123 | Empty= | [INFO_] | Message\n| | line2\nFoo=Bar SysRef=AA123456";
         let result = ParsedLine::new(line).expect("Parse should succeed");
-        assert_eq!(result.message, b"Message\n| | line2");
+        assert_eq!(result.message.as_ref(), b"Message\n| | line2");
     }
 }
 
@@ -773,7 +773,7 @@ mod real_log_line_tests {
         let result = ParsedLine::new(line.as_bytes()).expect("Parse should succeed");
         assert_eq!(result.log_date, b"2018-11-27 10:33:37.2324929");
         assert_eq!(result.log_level, b"[INFO_]");
-        assert_eq!(result.message, b"Some irrelevant message");
+        assert_eq!(result.message.as_ref(), b"Some irrelevant message");
 
         assert_eq!(result.kvps.len(), 9);
         assert_eq!(result.kvps.value(b"pid"), b"6384");

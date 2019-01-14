@@ -370,8 +370,8 @@ mod kvp_collection_tests {
         sut.insert(KVP::new(b"car", b"ford"));
 
         assert_eq!(sut.len(), 1);
-        assert_eq!(sut.get_value(b"car").unwrap(), b"ford");
-        assert_eq!(sut.get_value(b"Car").unwrap(), b"ford");
+        assert_eq!(sut.get_value(b"car").unwrap().as_ref(), b"ford");
+        assert_eq!(sut.get_value(b"Car").unwrap().as_ref(), b"ford");
         assert_eq!(sut.get_value(b"XYZ"), None);
     }
 }
@@ -510,7 +510,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(kvp.value.as_ref(), b"Ford");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -521,7 +521,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(kvp.value.as_ref(), b"Ford");
         assert_eq!(result.remaining_slice, b" ");
     }
 
@@ -532,7 +532,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(kvp.value.as_ref(), b"Ford");
         assert_eq!(result.remaining_slice, b" REM");
     }
 
@@ -543,7 +543,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(kvp.value.as_ref(), b"Ford");
         assert_eq!(result.remaining_slice, b"\r");
     }
 
@@ -565,7 +565,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b" ");
+        assert_eq!(kvp.value.as_ref(), b" ");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -577,7 +577,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b" REM");
+        assert_eq!(kvp.value.as_ref(), b" REM");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -588,7 +588,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"For");
+        assert_eq!(kvp.value.as_ref(), b"For");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -599,7 +599,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"For a");
+        assert_eq!(kvp.value.as_ref(), b"For a");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -610,7 +610,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"For");
+        assert_eq!(kvp.value.as_ref(), b"For");
         assert_eq!(result.remaining_slice, b"\r\n");
     }
 
@@ -643,7 +643,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b" ");
+        assert_eq!(kvp.value.as_ref(), b" ");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -654,7 +654,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford Fiesta");
+        assert_eq!(kvp.value.as_ref(), b"Ford Fiesta");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -665,7 +665,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford Fiesta");
+        assert_eq!(kvp.value.as_ref(), b"Ford Fiesta");
         assert_eq!(result.remaining_slice, b" ");
     }
 
@@ -676,7 +676,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"  Ford Fiesta  ");
+        assert_eq!(kvp.value.as_ref(), b"  Ford Fiesta  ");
         assert_eq!(result.remaining_slice, b" REM");
     }
 
@@ -687,7 +687,7 @@ mod next_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"  Ford");
+        assert_eq!(kvp.value.as_ref(), b"  Ford");
         assert_eq!(result.remaining_slice, b"\rFiesta  \"");
     }
 }
@@ -780,7 +780,7 @@ mod prev_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(kvp.value.as_ref(), b"Ford");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -791,7 +791,7 @@ mod prev_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(kvp.value.as_ref(), b"Ford");
         assert_eq!(result.remaining_slice, b" ");
     }
 
@@ -802,7 +802,7 @@ mod prev_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford");
+        assert_eq!(kvp.value.as_ref(), b"Ford");
         assert_eq!(result.remaining_slice, b"REM ");
     }
 
@@ -885,7 +885,7 @@ mod prev_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b" ");
+        assert_eq!(kvp.value.as_ref(), b" ");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -896,7 +896,7 @@ mod prev_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford Fiesta");
+        assert_eq!(kvp.value.as_ref(), b"Ford Fiesta");
         assert!(result.remaining_slice.is_empty());
     }
 
@@ -907,7 +907,7 @@ mod prev_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"Ford Fiesta");
+        assert_eq!(kvp.value.as_ref(), b"Ford Fiesta");
         assert_eq!(result.remaining_slice, b" ");
     }
 
@@ -927,7 +927,7 @@ mod prev_kvp_tests {
 
         let kvp = result.kvp.unwrap();
         assert_eq!(kvp.key, b"Car");
-        assert_eq!(kvp.value, b"  Ford Fiesta  ");
+        assert_eq!(kvp.value.as_ref(), b"  Ford Fiesta  ");
         assert_eq!(result.remaining_slice, b"REM ");
     }
 
