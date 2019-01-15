@@ -23,10 +23,8 @@ use crate::parsed_line::{ParsedLine, ParseLineResult};
 
 /* TODOs
 =============================================================================
-[ ] If a column is not in KVPs, attempt to extract from the message.
-[ ] Are alternate column names working?
-[ ] If line contains KVPs which are not in the column list then they are stripped off.
-    Should we make the message everything from the prologue to the end of the line?
+[ ] Auto-open the consolidated.csv.
+
 [ ] Perf: Figure out how to do profiling.
 [ ] Perf: Is it faster to write everything to RAM first? We could parallelize that.
 [ ] Tools: figure out how to run rustfmt in VS Code.
@@ -105,6 +103,7 @@ fn main() -> Result<(), io::Error> {
     // 1.506    ...writing main fields and kvps with single-threaded '\r' checking (direct to file)
     // 1.231    ...writing main fields and kvps with multi-threaded '\r' checking using Cow's (direct to file)
     // inlining all the ByteSliceExtensions makes no difference to the speed
+    // 1.419    ...as above plus using alternate names for KVPs
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
@@ -249,8 +248,7 @@ fn write_output_files(config: &Configuration, results: &[ParseLineResult]) -> Re
     Ok(error_count)
 }
 
-fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, line: &ParsedLine) -> Result<(), io::Error>
-{
+fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, line: &ParsedLine) -> Result<(), io::Error> {
     for column in &config.columns {
         match column.as_str() {
             kvp::LOG_DATE => writer.write_field(line.log_date)?,
@@ -261,7 +259,21 @@ fn write_line(config: &Configuration, writer: &mut csv::Writer<std::fs::File>, l
                 if let Some(kvp_value) = line.kvps.get_value(column.as_bytes()) {
                     writer.write_field(&kvp_value)?;
                 } else {
-                    writer.write_field(b"")?;
+                    // Check for the column under any alternative names.
+                    let mut did_write = false;
+                    if let Some(alternate_names) = config.alternate_column_names.get(column) {
+                        for alt_name in alternate_names {
+                            if let Some(kvp_value) = line.kvps.get_value(alt_name.as_bytes()) {
+                                writer.write_field(&kvp_value)?;
+                                did_write = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !did_write {
+                        writer.write_field(b"")?;
+                    }
                 }
             }
         }
