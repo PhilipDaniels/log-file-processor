@@ -36,11 +36,11 @@ impl InputFile {
         let length = fs::metadata(&path).expect("Can get file meta data").len() as usize;
 
         InputFile {
-            path: path,
-            length: length,
-            path_as_string: path_as_string,
+            path,
+            length,
+            path_as_string,
             filename_only_as_string: filename_as_string,
-            output_path: output_path
+            output_path,
         }
     }
 }

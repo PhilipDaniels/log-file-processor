@@ -41,7 +41,8 @@ pub trait ByteSliceExtensions {
 
     /// Makes the slice safe to write to CSV by checking for any embedded '\r' characters
     /// and replacing them with a space. Uses a Cow to avoid allocaions in most cases.
-    fn make_safe<'f>(&'f self) -> Cow<'f, [u8]>;
+    //fn make_safe<'f>(&'f self) -> Cow<'f, [u8]>;
+    fn make_safe(&self) -> Cow<[u8]>;
         // TODO: should be where T: std::clone::Clone, and Self is [T]
 }
 
@@ -103,7 +104,7 @@ impl ByteSliceExtensions for [u8] {
 
     /// Makes the slice safe to write to CSV by checking for any embedded '\r' characters
     /// and replacing them with a space. Uses a Cow to avoid allocaions in most cases.
-    fn make_safe<'f>(&'f self) -> Cow<'f, [u8]> {
+    fn make_safe(&self) -> Cow<[u8]> {
         if self.contains(&b'\r') || self.contains(&b'\n') {
             let safe: Vec<_> = self.iter().map(|&c| if c == b'\r' || c == b'\n' { b' ' } else { c }).collect();
             safe.into()

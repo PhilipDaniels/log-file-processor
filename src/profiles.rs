@@ -34,7 +34,7 @@ pub struct Profile {
     pub column_regexes: HashMap<String, String>,
 }
 
-fn vec_has_entry(entry: &str, vec: &Vec<String>) -> bool {
+fn vec_has_entry(entry: &str, vec: &[String]) -> bool {
     vec.iter().any(|c| c.eq_ignore_ascii_case(entry))
 }
 

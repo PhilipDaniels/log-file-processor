@@ -1,11 +1,11 @@
-use std::fs::{self, File};
-use std::time::Instant;
-use std::io;
-use csv::{WriterBuilder};
-use indicatif::{HumanBytes};
+use csv::WriterBuilder;
+use indicatif::HumanBytes;
 use itertools::Itertools;
-use structopt::StructOpt;
 use rayon::prelude::*;
+use std::fs::{self, File};
+use std::io;
+use std::time::Instant;
+use structopt::StructOpt;
 
 mod arguments;
 mod byte_extensions;
@@ -16,10 +16,10 @@ mod output;
 mod parsed_line;
 mod profiles;
 use crate::arguments::Arguments;
-use crate::profiles::ProfileSet;
 use crate::configuration::{get_config, Configuration};
-use crate::inputs::{Inputs, InputFile};
-use crate::parsed_line::{ParsedLine, ParseLineResult};
+use crate::inputs::{InputFile, Inputs};
+use crate::parsed_line::{ParseLineResult, ParsedLine};
+use crate::profiles::ProfileSet;
 
 /* TODOs
 =============================================================================
@@ -59,9 +59,9 @@ fn main() -> Result<(), io::Error> {
             match File::open(path) {
                 Ok(f) => serde_json::from_reader(f)?,
                 Err(ref e) if e.kind() == io::ErrorKind::NotFound => ProfileSet::default(),
-                Err(e) => panic!("Error opening ~/.lpf.json: {:?}", e)
+                Err(e) => panic!("Error opening ~/.lpf.json: {:?}", e),
             }
-        },
+        }
         None => {
             eprintln!("Cannot locate home directory, using default configuration.");
             ProfileSet::default()
@@ -78,7 +78,6 @@ fn main() -> Result<(), io::Error> {
 
     //println!("profiles = {:#?}", profiles);
     //println!("configuration = {:#?}", configuration);
-
 
     // Time to simply read and write the file
     // Threading        Ordering        Read Only   Read & Write
@@ -114,69 +113,71 @@ fn main() -> Result<(), io::Error> {
     // We need to get all the files into memory at the same time because we
     // want to collect a consolidated set of parsed line (over all the files).
     // The bytes of the files must therefore outlive all the parsed lines.
-    let all_files: Vec<(&InputFile, Vec<u8>)> = inputs.files.par_iter()
+    let all_files: Vec<(&InputFile, Vec<u8>)> = inputs
+        .files
+        .par_iter()
         .map(|f| (f, fs::read(&f.path).expect("Can read file")))
         .collect();
 
     // Process all files in parallel. Accumulate the lines written for each file so
     // that they can be merged and written to a single, sorted, consolidated file.
 
-    let mut all_lines_and_errors: Vec<_> =
-        all_files.par_iter()
-            .map(|(f, bytes)| {
-                let lines = find_lines(bytes);
-                println!("Found {} lines", lines.len());
+    let mut all_lines_and_errors: Vec<_> = all_files
+        .par_iter()
+        .map(|(f, bytes)| {
+            let lines = find_lines(bytes);
+            println!("Found {} lines", lines.len());
 
-                let parsing_results : Vec<_> = lines.par_iter()
-                    .enumerate()
-                    .map(|(line_num, &line)| {
-                        let mut parsed_line_result = ParsedLine::new(line);
+            let parsing_results: Vec<_> = lines
+                .par_iter()
+                .enumerate()
+                .map(|(line_num, &line)| {
+                    let mut parsed_line_result = ParsedLine::parse(line);
 
-                        // Attach line number and original source.
-                        match parsed_line_result {
-                            Ok(ref mut pl) => {
-                                pl.line_num = line_num;
-                                pl.source = &f.filename_only_as_string
-                            },
-                            Err(ref mut e) => {
-                                e.line_num = line_num;
-                                e.source = &f.filename_only_as_string
-                            },
-                        };
+                    // Attach line number and original source.
+                    match parsed_line_result {
+                        Ok(ref mut pl) => {
+                            pl.line_num = line_num;
+                            pl.source = &f.filename_only_as_string
+                        }
+                        Err(ref mut e) => {
+                            e.line_num = line_num;
+                            e.source = &f.filename_only_as_string
+                        }
+                    };
 
-                        parsed_line_result
-                    })
-                    .filter(filter_parsed_line)
-                    .collect();
+                    parsed_line_result
+                })
+                .filter(filter_parsed_line)
+                .collect();
 
-                parsing_results
-            })
-            .flatten()
-            .collect();
+            parsing_results
+        })
+        .flatten()
+        .collect();
 
     // Rust cannot always coerce a reference to an array such as:
     //      &b""
     // to a slice. We can force it to by [..]
     // This should put the errors at the front.
-    all_lines_and_errors.par_sort_by_key(|r| {
-        match r {
-            Ok(ref v) => (v.log_date, v.source, v.line_num),
-            Err(ref e) => (&b""[..], e.source, e.line_num)
-        }
+    all_lines_and_errors.par_sort_by_key(|r| match r {
+        Ok(ref v) => (v.log_date, v.source, v.line_num),
+        Err(ref e) => (&b""[..], e.source, e.line_num),
     });
 
     let total = all_lines_and_errors.len();
     let error_count = write_output_files(&configuration, &all_lines_and_errors)?;
 
     let elapsed = start_time.elapsed();
-    println!("Processed {} in {} files in {}.{:03} seconds, ok lines = {}, error lines = {}",
-         HumanBytes(total_bytes),
-         input_count,
-         elapsed.as_secs(),
-         elapsed.subsec_millis(),
-         total - error_count,
-         error_count
-         );
+    println!(
+        "Processed {} in {} files in {}.{:03} seconds, ok lines = {}, error lines = {}",
+        HumanBytes(total_bytes),
+        input_count,
+        elapsed.as_secs(),
+        elapsed.subsec_millis(),
+        total - error_count,
+        error_count
+    );
 
     Ok(())
 }
@@ -193,7 +194,7 @@ fn filter_parsed_line(parsed_line: &ParseLineResult) -> bool {
 /// by any stray '\r's in the log file.
 fn find_lines(bytes: &[u8]) -> Vec<&[u8]> {
     let mut cr_indexes: Vec<_> = bytes.iter().positions(|&c| c == b'\r').collect();
-    cr_indexes.retain(|&idx| idx == bytes.len() -1 || bytes[idx + 1] == b'\n');
+    cr_indexes.retain(|&idx| idx == bytes.len() - 1 || bytes[idx + 1] == b'\n');
     cr_indexes.insert(0, 0);
     let last_idx = cr_indexes[cr_indexes.len() - 1];
     if last_idx == bytes.len() - 2 || last_idx == bytes.len() - 1 {
@@ -203,19 +204,22 @@ fn find_lines(bytes: &[u8]) -> Vec<&[u8]> {
         cr_indexes.push(bytes.len() - 1);
     }
 
-    cr_indexes.windows(2)
+    cr_indexes
+        .windows(2)
         .map(|window| &bytes[window[0]..window[1]])
         .collect()
 }
 
-const EMPTY: [&'static [u8]; 0] = [];
+const EMPTY: [&[u8]; 0] = [];
 
 fn write_output_files(config: &Configuration, results: &[ParseLineResult]) -> Result<usize, io::Error> {
     const SUCCESS_FILE: &str = "consolidated.csv";
     const ERROR_FILE: &str = "errors.csv";
 
     let mut error_count = 0;
-    let mut success_writer = WriterBuilder::new().flexible(true).from_path(SUCCESS_FILE)?;
+    let mut success_writer = WriterBuilder::new()
+        .flexible(true)
+        .from_path(SUCCESS_FILE)?;
     let mut error_writer = WriterBuilder::new().flexible(true).from_path(ERROR_FILE)?;
 
     success_writer.write_record(config.columns.iter())?;
@@ -235,7 +239,7 @@ fn write_output_files(config: &Configuration, results: &[ParseLineResult]) -> Re
                 error_writer.write_field(parsed_line_error.line)?;
                 error_writer.write_record(&EMPTY)?;
                 error_count += 1;
-            },
+            }
         }
     }
 

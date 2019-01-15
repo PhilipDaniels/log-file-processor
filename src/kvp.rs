@@ -7,7 +7,7 @@ use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
 /// The set of possible log level emitted by the logging framework.
 /// They are ordered by frequency of occurence, as this should give a (very small!)
 /// performance boost when checking for them.
-pub const LOG_LEVELS: [&'static [u8]; 9] =
+pub const LOG_LEVELS: [&[u8]; 9] =
 [
     b"[INFO_]",
     b"[DEBUG]",
@@ -50,7 +50,7 @@ pub struct KVP<'f> {
 impl<'f> KVP<'f> {
     fn new(key: &'f [u8], value: &'f [u8]) -> Self {
         KVP {
-            key: key,
+            key,
             value: value.make_safe(),
             is_log_level: false
         }
@@ -227,7 +227,7 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
             }
         } else {
             // We have a KVP of the form "Key=Value". Find the next whitespace character.
-            let idx = value_slice.iter().position(|&c| c.is_whitespace()).unwrap_or(value_slice.len());
+            let idx = value_slice.iter().position(|&c| c.is_whitespace()).unwrap_or_else(|| value_slice.len());
             let value_slice = &value_slice[0..idx];
             // 1 for the equals sign.
             KVPParseResult {
@@ -283,7 +283,7 @@ impl<'s> ByteSliceKvpExtensions<'s> for &'s [u8] {
             //    self.to_string(), key_slice.to_string(), value_slice.to_string(), remaining_slice.to_string());
 
             KVPParseResult {
-                remaining_slice: remaining_slice,
+                remaining_slice,
                 kvp: Some(KVP::new(key_slice, value_slice))
             }
         };

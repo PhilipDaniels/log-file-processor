@@ -4,7 +4,7 @@ use crate::arguments::Arguments;
 use crate::profiles::{Profile, ProfileSet, vec_add_entry};
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
-pub const DEFAULT_MAX_MESSAGE_LENGTH: usize = 1000000;
+pub const DEFAULT_MAX_MESSAGE_LENGTH: usize = 1_000_000;
 
 #[derive(Debug)]
 pub struct Configuration {
@@ -112,16 +112,16 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
     // Determine the baseline profile to which we will apply any overrides.
     // If there is a profile named "default" in the .lpf.json file we use it - this allows
     // the user to customize the default profile - otherwise we just generate one in code.
-    let profile = match args.no_default_profile {
-        true => Profile::blank(),
-        false => profiles.get(DEFAULT_PROFILE_NAME).map_or(Profile::default(), |p| p.clone())
+    let profile = if args.no_default_profile {
+        Profile::blank()
+    } else {
+        profiles.get(DEFAULT_PROFILE_NAME).map_or(Profile::default(), |p| p.clone())
     };
 
     let mut config = Configuration::from(profile);
 
     if args.profile != DEFAULT_PROFILE_NAME {
-        let override_profile = profiles.get(&args.profile)
-            .expect(&format!("Profile '{}' does not exist", args.profile));
+        let override_profile = profiles.get(&args.profile).unwrap_or_else(|| panic!("Profile '{}' does not exist", args.profile));
 
         config.name = override_profile.name.clone();
         if let Some(quiet) = override_profile.quiet {
