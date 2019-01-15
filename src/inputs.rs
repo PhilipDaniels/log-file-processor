@@ -79,9 +79,9 @@ impl Inputs {
         self.files.is_empty()
     }
 
-    pub fn longest_input_name_len(&self) -> usize {
-        self.files.iter().map(|f| f.filename_only_as_string.len()).max().unwrap()
-    }
+    // pub fn longest_input_name_len(&self) -> usize {
+    //     self.files.iter().map(|f| f.filename_only_as_string.len()).max().unwrap()
+    // }
 
     fn contains_file(&self, path: &Path) -> bool {
         self.files.iter().any(|f| f.path == path)

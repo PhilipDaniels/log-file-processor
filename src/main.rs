@@ -24,6 +24,7 @@ use crate::parsed_line::{ParsedLine, ParseLineResult};
 /* TODOs
 =============================================================================
 [ ] Auto-open the consolidated.csv.
+[ ] Excel has trouble with the LogDate string.
 
 [ ] Perf: Figure out how to do profiling.
 [ ] Perf: Is it faster to write everything to RAM first? We could parallelize that.
@@ -104,6 +105,7 @@ fn main() -> Result<(), io::Error> {
     // 1.231    ...writing main fields and kvps with multi-threaded '\r' checking using Cow's (direct to file)
     // inlining all the ByteSliceExtensions makes no difference to the speed
     // 1.419    ...as above plus using alternate names for KVPs
+    // 2.506    ...include entire line in the message
 
     let start_time = Instant::now();
     let total_bytes = inputs.total_bytes() as u64;
