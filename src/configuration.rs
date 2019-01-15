@@ -30,6 +30,11 @@ pub struct Configuration {
     /// each column. If a column has no entry in here, then it is retrieved from the
     /// extracted KVPs or using a default regex to probe the message text itself.
     pub column_regexes: HashMap<String, Regex>,
+
+    /// List of sysrefs to filter by. Can be empty, in which case no filtering is done.
+    /// If non-empty, then the line must have one of these sysrefs to be written to
+    /// the output.
+    pub sysrefs: Vec<String>,
 }
 
 /// Makes a regex that extracts key-value pairs of the form
@@ -54,6 +59,7 @@ impl From<Profile> for Configuration {
             alternate_column_names: p.alternate_column_names,
             file_patterns: p.file_patterns,
             column_regexes: HashMap::new(),
+            sysrefs: vec![],
         };
 
         // Insert any custom regexes.
@@ -157,6 +163,7 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
     for pat in &args.files {
         config.add_file_pattern(pat.to_string());
     }
+    config.sysrefs.extend(args.sysrefs.clone());
 
     // Default if no profile or command line specifies a file pattern.
     // Means we will process everything in the current directory.

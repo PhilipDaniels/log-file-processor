@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
 /// Represents command-line arguments.
-#[derive(StructOpt, Debug)] 
+#[derive(StructOpt, Debug)]
 pub struct Arguments {
     /// The name of the profile to read from the configuration file.
     /// Profiles are additive - first the default profile is applied, then this profile,
@@ -31,6 +31,10 @@ pub struct Arguments {
     #[structopt(short = "d", long = "dump-config")]
     pub dump_config: bool,
 
+    /// Optional list of sysrefs to filter by. Separate them by commas.
+    #[structopt(short = "s", long = "sysrefs", use_delimiter = true)]
+    pub sysrefs: Vec<String>,
+
     /// List of files to process. Defaults to "*.log".
     #[structopt(name = "FILE")]
     pub files: Vec<String>,
@@ -47,7 +51,8 @@ impl Default for Arguments {
             quiet: None,
             max_message_length: None,
             dump_config: false,
-            files: vec![]
+            sysrefs: vec![],
+            files: vec![],
         }
     }
 }

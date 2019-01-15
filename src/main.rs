@@ -45,6 +45,7 @@ use crate::profiles::ProfileSet;
 fn main() -> Result<(), io::Error> {
     let args = Arguments::from_args();
     //println!("Args = {:#?}", args);
+    //std::process::exit(0);
 
     if args.dump_config {
         let profiles = ProfileSet::default();
@@ -77,7 +78,7 @@ fn main() -> Result<(), io::Error> {
     }
 
     //println!("profiles = {:#?}", profiles);
-    //println!("configuration = {:#?}", configuration);
+    println!("configuration = {:#?}", configuration);
 
     // Time to simply read and write the file
     // Threading        Ordering        Read Only   Read & Write
@@ -148,7 +149,7 @@ fn main() -> Result<(), io::Error> {
 
                     parsed_line_result
                 })
-                .filter(filter_parsed_line)
+                .filter(|parsed_line_result| should_output_line(&configuration, parsed_line_result))
                 .collect();
 
             parsing_results
@@ -185,8 +186,15 @@ fn main() -> Result<(), io::Error> {
 /// Applies the appropriate filtering to parsed line results.
 /// Errors are always passed through, but successfully parsed lines may have a filter applied,
 /// for example to match a sysref or a date range.
-fn filter_parsed_line(parsed_line: &ParseLineResult) -> bool {
-    parsed_line.is_err() || true
+fn should_output_line(config: &Configuration, parsed_line_result: &ParseLineResult) -> bool {
+    match parsed_line_result {
+        Err(_) => true,
+        Ok(line) => match (config.sysrefs.is_empty(), line.kvps.get_value(b"sysref")) {
+            (true, _) => true,
+            (false, Some(srval)) => config.sysrefs.contains(srval),
+            (false, None) => false
+        }
+    }
 }
 
 /// Look for the \r\n line endings in the file and return a vector of
