@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
-use crate::kvp::{self, KVPCollection, ByteSliceKvpExtensions};
+use crate::kvp::{KVPCollection, ByteSliceKvpExtensions};
 
 /*
 Notes
@@ -107,7 +107,7 @@ impl<'f> ParsedLine<'f> {
         let mut parsed_line = ParsedLine { line, .. ParsedLine::default() };
 
         // Extract the log date, splitting the line into two slices - the log date and the remainder.
-        match ParsedLine::extract_log_date_fast(&line) {
+        match ParsedLine::extract_log_date(&line) {
             Ok((log_date_slice, remainder)) => {
                 parsed_line.log_date = log_date_slice;
                 line = remainder;
@@ -138,6 +138,12 @@ impl<'f> ParsedLine<'f> {
         let mut line = line.trim_while(ByteExtensions::is_whitespace);
         if line.is_empty() { return Ok(parsed_line); }
 
+        // Store the entire remainder of the line as the message. This includes trailing KVPs.
+        // This is important, as without it, context can be lost. For example, if a KVP is not
+        // named as a column and we do this after trimming the trailing KVPs we will never see
+        // what that KVP's value was. This may hinder debugging.
+        parsed_line.message = line.make_safe();
+
         // Now find trailing KVPs. There are usually more of these than leading ones.
         loop {
             let kvp_parse_result = line.prev_kvp();
@@ -149,10 +155,10 @@ impl<'f> ParsedLine<'f> {
             }
         }
 
-        parsed_line.message = line.trim_right_while(ByteExtensions::is_whitespace).make_safe();
         Ok(parsed_line)
     }
 
+    /*
     fn extract_log_date_fast(line: &[u8]) -> Result<(&[u8],&[u8]), String> {
         if line.len() < ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP {
             let msg = format!("The input line is less than {} characters, which indicates it does not even contain a logging timestamp", ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP);
@@ -161,6 +167,7 @@ impl<'f> ParsedLine<'f> {
             Ok(line.split_at(ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP))
         }
     }
+    */
 
     /// Extracts the log date from the message. We expect this to occur at the beginning of the message
     /// and to have a specific number of characters.
@@ -171,38 +178,41 @@ impl<'f> ParsedLine<'f> {
         }
 
         // The numbers.
-        for idx in vec![0,1,2,3,5,6,8,9,11,12,14,15,17,18,20,21,22,23,24,25,26] {
+        const DECIMAL_INDEXES: [usize; 21] = [0,1,2,3,5,6,8,9,11,12,14,15,17,18,20,21,22,23,24,25,26];
+        for &idx in &DECIMAL_INDEXES {
             if !line[idx].is_decimal_digit() {
-                let msg = format!("Character {} was expected to be a decimal digit, but was {}", idx, line[idx] as char);
+                let msg = format!("Character {} was expected to be a decimal digit, but was '{}'", idx, line[idx] as char);
                 return Err(msg);
             }
         }
 
         // The separators in the date component.
-        for idx in vec![4,7] {
+        const DATE_SEP_INDEXES: [usize; 2] = [4,7];
+        for &idx in &DATE_SEP_INDEXES {
             if line[idx] != b'-' {
-                let msg = format!("Character {} was expected to be '-', but was {}", idx, line[idx] as char);
+                let msg = format!("Character {} was expected to be '-', but was '{}'", idx, line[idx] as char);
                 return Err(msg);
             }
         }
 
         // The separators in the time component.
-        for idx in vec![13,16] {
+        const TIME_SEP_INDEXES: [usize; 2] = [13,16];
+        for &idx in &TIME_SEP_INDEXES {
             if line[idx] != b':' {
-                let msg = format!("Character {} was expected to be '-', but was {}", idx, line[idx] as char);
+                let msg = format!("Character {} was expected to be '-', but was '{}'", idx, line[idx] as char);
                 return Err(msg);
             }
         }
 
         // YYYY-MM-DD_
         if line[10] != b' ' {
-            let msg = format!("Character {} was expected to be ' ', but was {}", 10, line[10] as char);
+            let msg = format!("Character {} was expected to be ' ', but was '{}'", 10, line[10] as char);
             return Err(msg);
         }
 
         // YYYY-MM-DD_HH:MM:SS.
         if line[19] != b'.' {
-            let msg = format!("Character {} was expected to be '.', but was {}", 19, line[19] as char);
+            let msg = format!("Character {} was expected to be '.', but was '{}'", 19, line[19] as char);
             return Err(msg);
         }
 
