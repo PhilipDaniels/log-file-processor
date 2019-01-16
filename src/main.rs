@@ -33,6 +33,11 @@ use crate::profiles::ProfileSet;
 
 [ ] Allow custom regex extractors for columns.
 [ ] Filter: from/to dates
+    I have added the raw strings to the Arguments.
+    I now need to add to the profile.
+    Then do the From for Configuration
+    Then do the get_config method
+    Finally apply the date filter to the parsed line.
 [ ] Filter: column is non-blank, e.g. for call recorder execution time
 [ ] Filter: column matches a regex, ANY column matches a regex. DOES NOT MATCH, e.g. to get rid of heartbeats.
 
@@ -54,7 +59,7 @@ Some sysrefs seen:
 
 fn main() -> Result<(), io::Error> {
     let args = Arguments::from_args();
-    //println!("Args = {:#?}", args);
+    println!("Args = {:#?}", args);
     //std::process::exit(0);
 
     if args.dump_config {
@@ -88,7 +93,7 @@ fn main() -> Result<(), io::Error> {
     }
 
     //println!("profiles = {:#?}", profiles);
-    println!("configuration = {:#?}", configuration);
+    //println!("configuration = {:#?}", configuration);
 
     // Time to simply read and write the file
     // Threading        Ordering        Read Only   Read & Write

@@ -35,6 +35,20 @@ pub struct Arguments {
     #[structopt(short = "s", long = "sysrefs", use_delimiter = true)]
     pub sysrefs: Vec<String>,
 
+    /// Filtering: Only show records whose LogDate is greater than or equal to this date.
+    /// If not specified, all records back to the beginning of time will be shown.
+    /// The format is the same as the LogDate: "YYYY-MM-DD HH:MM:SS". It will also accept
+    /// "YYYY-MM-DD", "HH:MM" (assumed to be today) and "yesterday".
+    #[structopt(short = "f", long = "from", default_value = "")]
+    pub from: String,
+
+    /// Filtering: Only show records whose LogDate is less than or equal to this date.
+    /// If not specified, all records back up to the end of time will be shown.
+    /// The format is the same as the LogDate: "YYYY-MM-DD HH:MM:SS". It will also accept
+    /// "YYYY-MM-DD", "HH:MM" (assumed to be today) and "yesterday".
+    #[structopt(short = "t", long = "to", default_value = "")]
+    pub to: String,
+
     /// List of files to process. Defaults to "*.log".
     #[structopt(name = "FILE")]
     pub files: Vec<String>,
@@ -52,6 +66,8 @@ impl Default for Arguments {
             max_message_length: None,
             dump_config: false,
             sysrefs: vec![],
+            from: "".to_string(),
+            to: "".to_string(),
             files: vec![],
         }
     }

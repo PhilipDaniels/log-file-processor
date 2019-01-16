@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use chrono::prelude::*;
 use crate::byte_extensions::{ByteExtensions, ByteSliceExtensions};
 use crate::kvp::{KVPCollection, ByteSliceKvpExtensions};
 
@@ -235,6 +236,123 @@ impl<'f> ParsedLine<'f> {
         // }
 
         Ok(line.split_at(ParsedLine::LENGTH_OF_LOGGING_TIMESTAMP))
+    }
+}
+
+/// Converts a string slice to a DateTime, for comparison purposes.
+pub fn string_to_utc_datetime(s: &str) -> Result<DateTime<Utc>, String> {
+    // This is the standard LogDate pattern (albeit with up to 9 decimal places rather than 7).
+    let dt = Utc.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.9f");
+    if !dt.is_err() { return Ok(dt.unwrap()); }
+
+    // In case people start adding T's.
+    let dt = Utc.datetime_from_str(s, "%Y-%m-%dT%H:%M:%S%.9f");
+    if !dt.is_err() { return Ok(dt.unwrap()); }
+
+    let dt = Utc.datetime_from_str(s, "%Y-%m-%d %H:%M:%S");
+    if !dt.is_err() { return Ok(dt.unwrap()); }
+
+    // NaiveDate becase we have no timezone information.
+    let ndt = NaiveDate::parse_from_str(s, "%Y-%m-%d");
+    if !ndt.is_err() {
+        let ndt = ndt.unwrap();
+        return Ok(Utc.ymd(ndt.year(), ndt.month(), ndt.day()).and_hms(0, 0, 0));
+    };
+
+    // Similarly...
+    let nt = NaiveTime::parse_from_str(s, "%H:%M:%S");
+    if !nt.is_err() {
+        let nt = nt.unwrap();
+        return Ok(Utc::today().and_hms(nt.hour(), nt.minute(), nt.second()));
+    }
+
+    let nt = NaiveTime::parse_from_str(s, "%H:%M");
+    if !nt.is_err() {
+        let nt = nt.unwrap();
+        return Ok(Utc::today().and_hms(nt.hour(), nt.minute(), 0));
+    }
+
+    // The beginning of yesterday.
+    if s == "yesterday" {
+        let dt = Utc::today().pred();
+        return Ok(Utc.ymd(dt.year(), dt.month(), dt.day()).and_hms(0, 0, 0));
+    }
+
+    // The beginning of today.
+    if s == "today" {
+        return Ok(Utc::today().and_hms(0, 0, 0));
+    }
+
+    Err(format!("Cannot convert {} to a DateTime", s))
+}
+
+#[cfg(test)]
+mod string_to_utc_datetime_tests {
+    use chrono::prelude::*;
+    use super::string_to_utc_datetime;
+
+    #[test]
+    pub fn for_standard_log_date() {
+        let dt = string_to_utc_datetime("2018-01-02 03:04:05.6789123").unwrap();
+        assert_eq!(Utc.ymd(2018, 1, 2).and_hms_nano(3, 4, 5, 678912300), dt);
+
+        // Paranoia: do one in BST too.
+        let dt = string_to_utc_datetime("2018-06-02 03:04:05.6789123").unwrap();
+        assert_eq!(Utc.ymd(2018, 6, 2).and_hms_nano(3, 4, 5, 678912300), dt);
+
+        let dt = string_to_utc_datetime("2018-06-02T03:04:05.6789123").unwrap();
+        assert_eq!(Utc.ymd(2018, 6, 2).and_hms_nano(3, 4, 5, 678912300), dt);
+    }
+
+    #[test]
+    pub fn for_date_and_time() {
+        let dt = string_to_utc_datetime("2018-01-02 03:04:05").unwrap();
+        assert_eq!(Utc.ymd(2018, 1, 2).and_hms(3, 4, 5), dt);
+    }
+
+    #[test]
+    pub fn for_date() {
+        let dt = string_to_utc_datetime("2018-01-02").unwrap();
+        assert_eq!(Utc.ymd(2018, 1, 2).and_hms(0, 0, 0), dt);
+    }
+
+    #[test]
+    pub fn for_time_with_seconds() {
+        let dt = string_to_utc_datetime("03:04:05").unwrap();
+        assert_eq!(Utc::today().and_hms(3, 4, 5), dt);
+    }
+
+    #[test]
+    pub fn for_time_without_seconds() {
+        let dt = string_to_utc_datetime("03:04").unwrap();
+        assert_eq!(Utc::today().and_hms(3, 4, 0), dt);
+    }
+
+    #[test]
+    pub fn for_today() {
+        let dt = string_to_utc_datetime("today").unwrap();
+        assert_eq!(Utc::today().and_hms(0, 0, 0), dt);
+    }
+
+    #[test]
+    pub fn for_yesterday() {
+        let dt = string_to_utc_datetime("yesterday").unwrap();
+        assert_eq!(Utc::today().pred(), dt.date());
+        assert_eq!(0, dt.hour());
+        assert_eq!(0, dt.minute());
+        assert_eq!(0, dt.second());
+    }
+
+    #[test]
+    pub fn for_empty() {
+        let dt = string_to_utc_datetime("");
+        assert!(dt.is_err());
+    }
+
+    #[test]
+    pub fn for_gibberisj() {
+        let dt = string_to_utc_datetime("dslkhg dhg");
+        assert!(dt.is_err());
     }
 }
 

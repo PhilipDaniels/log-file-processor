@@ -1,5 +1,6 @@
 use std::collections::{HashMap};
 use regex::{Regex, RegexBuilder};
+use chrono::prelude::*;
 use crate::arguments::Arguments;
 use crate::profiles::{Profile, ProfileSet, vec_add_entry};
 
@@ -36,6 +37,14 @@ pub struct Configuration {
     /// the output. Converted to Vec<u8> at init time to make comparison later on
     /// faster and easier.
     pub sysrefs: Vec<Vec<u8>>,
+
+    /// Filtering: Only show records whose LogDate is greater than or equal to this date.
+    /// If not specified, all records back to the beginning of time will be shown.
+    /// The format is the same as the LogDate: "YYYY-MM-DD HH:MM:SS" which allows us to
+    /// perform the check crudely, by a simple string comparison.
+    pub from: Option<DateTime<Utc>>,
+    pub to: Option<DateTime<Utc>>,
+
 }
 
 /// Makes a regex that extracts key-value pairs of the form
@@ -61,6 +70,8 @@ impl From<Profile> for Configuration {
             file_patterns: p.file_patterns,
             column_regexes: HashMap::new(),
             sysrefs: vec![],
+            from: None,
+            to: None
         };
 
         // Insert any custom regexes.
