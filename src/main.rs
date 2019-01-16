@@ -33,13 +33,23 @@ use crate::profiles::ProfileSet;
 
 [ ] Allow custom regex extractors for columns.
 [ ] Filter: from/to dates
-[ ] Filter: sysref
 [ ] Filter: column is non-blank, e.g. for call recorder execution time
 [ ] Filter: column matches a regex, ANY column matches a regex. DOES NOT MATCH, e.g. to get rid of heartbeats.
 
 [ ] Rewrite using nom!
 [ ] Write some macros to help with the ugliness of the tests
 [ ] Get a better assertions library
+
+Some sysrefs seen:
+    Q2952601
+    Q2952601
+    Q2967281
+    Q2952601
+    Q2967281
+    Q2975135
+    Q2967281
+    Q2970508
+    Q2967281
 */
 
 fn main() -> Result<(), io::Error> {
@@ -191,7 +201,7 @@ fn should_output_line(config: &Configuration, parsed_line_result: &ParseLineResu
         Err(_) => true,
         Ok(line) => match (config.sysrefs.is_empty(), line.kvps.get_value(b"sysref")) {
             (true, _) => true,
-            (false, Some(srval)) => config.sysrefs.contains(srval),
+            (false, Some(sr_from_line)) => config.sysrefs.iter().any(|sr| sr == &sr_from_line.as_ref()),
             (false, None) => false
         }
     }

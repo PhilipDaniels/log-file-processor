@@ -33,8 +33,9 @@ pub struct Configuration {
 
     /// List of sysrefs to filter by. Can be empty, in which case no filtering is done.
     /// If non-empty, then the line must have one of these sysrefs to be written to
-    /// the output.
-    pub sysrefs: Vec<String>,
+    /// the output. Converted to Vec<u8> at init time to make comparison later on
+    /// faster and easier.
+    pub sysrefs: Vec<Vec<u8>>,
 }
 
 /// Makes a regex that extracts key-value pairs of the form
@@ -163,7 +164,8 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
     for pat in &args.files {
         config.add_file_pattern(pat.to_string());
     }
-    config.sysrefs.extend(args.sysrefs.clone());
+
+    config.sysrefs.extend(args.sysrefs.iter().map(|sr| sr.bytes().collect()));
 
     // Default if no profile or command line specifies a file pattern.
     // Means we will process everything in the current directory.
