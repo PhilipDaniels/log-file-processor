@@ -32,6 +32,18 @@ pub struct Profile {
     /// each column. If a column has no entry in here, then it is retrieved from the
     /// extracted KVPs or using a default regex to probe the message text itself.
     pub column_regexes: HashMap<String, String>,
+
+    /// Filtering: Only show records whose LogDate is greater than or equal to this date.
+    /// If not specified, all records back to the beginning of time will be shown.
+    /// The format is the same as the LogDate: "YYYY-MM-DD HH:MM:SS". It will also accept
+    /// "YYYY-MM-DD", "HH:MM" (assumed to be today) and "yesterday".
+    pub from: Option<String>,
+
+    /// Filtering: Only show records whose LogDate is less than or equal to this date.
+    /// If not specified, all records back up to the end of time will be shown.
+    /// The format is the same as the LogDate: "YYYY-MM-DD HH:MM:SS". It will also accept
+    /// "YYYY-MM-DD", "HH:MM" (assumed to be today) and "yesterday".
+    pub to: Option<String>,
 }
 
 fn vec_has_entry(entry: &str, vec: &[String]) -> bool {
@@ -57,6 +69,8 @@ impl Profile {
             alternate_column_names: HashMap::new(),
             file_patterns: Vec::new(),
             column_regexes: HashMap::new(),
+            from: None,
+            to: None
         }
     }
 

@@ -59,7 +59,7 @@ fn main() -> Result<(), io::Error> {
     }
 
     //println!("profiles = {:#?}", profiles);
-    //println!("configuration = {:#?}", configuration);
+    println!("configuration = {:#?}", configuration);
 
     // Time to simply read and write the file
     // Threading        Ordering        Read Only   Read & Write

@@ -3,6 +3,7 @@ use regex::{Regex, RegexBuilder};
 use chrono::prelude::*;
 use crate::arguments::Arguments;
 use crate::profiles::{Profile, ProfileSet, vec_add_entry};
+use crate::parsed_line::string_to_utc_datetime_and_panic;
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const DEFAULT_MAX_MESSAGE_LENGTH: usize = 1_000_000;
@@ -90,6 +91,7 @@ impl From<Profile> for Configuration {
             }
         }
 
+        config.set_from_and_to(&p.from, &p.to);
         config
     }
 }
@@ -120,6 +122,23 @@ impl Configuration {
         let regex = make_case_insensitive_regex_for_pattern(pattern);
         self.column_regexes.insert(column_name.into(), regex);
     }
+
+    pub fn set_from_and_to(&mut self, from: &Option<String>, to: &Option<String>)
+    {
+        if let Some(from_string) = from {
+            let from_string = from_string.trim();
+            if !from_string.is_empty() {
+                self.from = Some(string_to_utc_datetime_and_panic(&from_string));
+            }
+        }
+
+        if let Some(to_string) = to {
+            let to_string = to_string.trim();
+            if !to_string.is_empty() {
+                self.to = Some(string_to_utc_datetime_and_panic(&to_string));
+            }
+        }
+    }
 }
 
 /// Represents the final configuration, being a combination of
@@ -138,6 +157,8 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
 
     let mut config = Configuration::from(profile);
 
+    // If the user specified that they want to use a particular profile, we then
+    // add its distinctiveness to our own. This is an *additive* operation only.
     if args.profile != DEFAULT_PROFILE_NAME {
         let override_profile = profiles.get(&args.profile).unwrap_or_else(|| panic!("Profile '{}' does not exist", args.profile));
 
@@ -163,6 +184,8 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
         for (column_name, pattern) in &override_profile.column_regexes {
             config.add_column_regex(column_name.clone(), &pattern);
         }
+
+        config.set_from_and_to(&override_profile.from, &override_profile.to);
     }
 
     // Now apply overrides from the command line arguments.
@@ -175,6 +198,8 @@ pub fn get_config(profiles: &ProfileSet, args: &Arguments) -> Configuration {
     for pat in &args.files {
         config.add_file_pattern(pat.to_string());
     }
+
+    config.set_from_and_to(&args.from, &args.to);
 
     config.sysrefs.extend(args.sysrefs.iter().map(|sr| sr.bytes().collect()));
 

@@ -239,8 +239,15 @@ impl<'f> ParsedLine<'f> {
     }
 }
 
+pub fn string_to_utc_datetime_and_panic(s: &str) -> DateTime<Utc> {
+    match string_to_utc_datetime(s) {
+        Ok(dt) => dt,
+        Err(_) => panic!("Could not convert {} to a datetime", s)
+    }
+}
+
 /// Converts a string slice to a DateTime, for comparison purposes.
-pub fn string_to_utc_datetime(s: &str) -> Result<DateTime<Utc>, String> {
+fn string_to_utc_datetime(s: &str) -> Result<DateTime<Utc>, String> {
     // This is the standard LogDate pattern (albeit with up to 9 decimal places rather than 7).
     let dt = Utc.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.9f");
     if dt.is_ok() { return Ok(dt.unwrap()); }

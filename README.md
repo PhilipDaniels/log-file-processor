@@ -15,12 +15,7 @@ The aim was to go as fast as possible while keeping clear code.
 * [ ] Tools: figure out how to run rustfmt in VS Code.
 * [ ] Tools: figure out how to run clippy in VS Code
 * [ ] Allow custom regex extractors for columns.
-* [ ] Filter: from/to dates
-    - I have added the raw strings to the Arguments.
-    - I now need to add to the profile.
-    - Then do the From for Configuration
-    - Then do the get_config method
-    - Finally apply the date filter to the parsed line.
+* [ ] Filter: from/to dates: apply the date filter to the parsed line.
 * [ ] Filter: column is non-blank, e.g. for call recorder execution time
 * [ ] Filter: column matches a regex, ANY column matches a regex. DOES NOT MATCH, e.g. to get rid of heartbeats.
 * [ ] Rewrite using nom!
@@ -34,6 +29,8 @@ Q2952601,Q2952601,Q2967281,Q2952601,Q2967281,Q2975135,Q2967281,Q2970508,Q2967281
 
 # Interesting Crates
 * rpassword (for reading)
-* https://github.com/hwchen/keyring-rs ?
+* https://crates.io/crates/rusterpassword
 * Persistent secure credentials
+* https://crates.io/crates/crypto_vault (try 'vault' and 'encrypt')
+* https://github.com/rust-keylock/rust-keylock-lib
 

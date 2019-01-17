@@ -39,15 +39,15 @@ pub struct Arguments {
     /// If not specified, all records back to the beginning of time will be shown.
     /// The format is the same as the LogDate: "YYYY-MM-DD HH:MM:SS". It will also accept
     /// "YYYY-MM-DD", "HH:MM" (assumed to be today) and "yesterday".
-    #[structopt(short = "f", long = "from", default_value = "")]
-    pub from: String,
+    #[structopt(short = "f", long = "from")]
+    pub from: Option<String>,
 
     /// Filtering: Only show records whose LogDate is less than or equal to this date.
     /// If not specified, all records back up to the end of time will be shown.
     /// The format is the same as the LogDate: "YYYY-MM-DD HH:MM:SS". It will also accept
     /// "YYYY-MM-DD", "HH:MM" (assumed to be today) and "yesterday".
-    #[structopt(short = "t", long = "to", default_value = "")]
-    pub to: String,
+    #[structopt(short = "t", long = "to")]
+    pub to: Option<String>,
 
     /// List of files to process. Defaults to "*.log".
     #[structopt(name = "FILE")]
@@ -66,8 +66,8 @@ impl Default for Arguments {
             max_message_length: None,
             dump_config: false,
             sysrefs: vec![],
-            from: "".to_string(),
-            to: "".to_string(),
+            from: None,
+            to: None,
             files: vec![],
         }
     }
