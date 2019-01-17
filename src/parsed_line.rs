@@ -252,6 +252,9 @@ pub fn string_to_utc_datetime(s: &str) -> Result<DateTime<Utc>, String> {
     let dt = Utc.datetime_from_str(s, "%Y-%m-%d %H:%M:%S");
     if dt.is_ok() { return Ok(dt.unwrap()); }
 
+    let dt = Utc.datetime_from_str(s, "%Y-%m-%d %H:%M");
+    if dt.is_ok() { return Ok(dt.unwrap()); }
+
     // NaiveDate becase we have no timezone information.
     let ndt = NaiveDate::parse_from_str(s, "%Y-%m-%d");
     if ndt.is_ok() {
@@ -305,9 +308,15 @@ mod string_to_utc_datetime_tests {
     }
 
     #[test]
-    pub fn for_date_and_time() {
+    pub fn for_date_and_time_to_second_accuracy() {
         let dt = string_to_utc_datetime("2018-01-02 03:04:05").unwrap();
         assert_eq!(Utc.ymd(2018, 1, 2).and_hms(3, 4, 5), dt);
+    }
+
+    #[test]
+    pub fn for_date_and_time_to_minute_accuracy() {
+        let dt = string_to_utc_datetime("2018-01-02 03:04").unwrap();
+        assert_eq!(Utc.ymd(2018, 1, 2).and_hms(3, 4, 0), dt);
     }
 
     #[test]
