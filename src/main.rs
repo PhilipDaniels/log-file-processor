@@ -18,14 +18,14 @@ mod profiles;
 use crate::arguments::Arguments;
 use crate::configuration::{get_config, Configuration};
 use crate::inputs::{InputFile, Inputs};
-use crate::parsed_line::{ParseLineResult, ParsedLine};
+use crate::parsed_line::{ParseLineResult, ParsedLine, string_to_utc_datetime_and_panic};
 use crate::profiles::ProfileSet;
 
 
 
 fn main() -> Result<(), io::Error> {
     let args = Arguments::from_args();
-    println!("Args = {:#?}", args);
+    //println!("Args = {:#?}", args);
     //std::process::exit(0);
 
     if args.dump_config {
@@ -59,7 +59,7 @@ fn main() -> Result<(), io::Error> {
     }
 
     //println!("profiles = {:#?}", profiles);
-    println!("configuration = {:#?}", configuration);
+    //println!("configuration = {:#?}", configuration);
 
     // Time to simply read and write the file
     // Threading        Ordering        Read Only   Read & Write
@@ -165,17 +165,37 @@ fn main() -> Result<(), io::Error> {
 }
 
 /// Applies the appropriate filtering to parsed line results.
-/// Errors are always passed through, but successfully parsed lines may have a filter applied,
-/// for example to match a sysref or a date range.
+/// Errors are always passed through so that they can be written to the errors file,
+/// but successfully parsed lines may have a filter applied, for example to match a sysref
+/// or a date range.
 fn should_output_line(config: &Configuration, parsed_line_result: &ParseLineResult) -> bool {
-    match parsed_line_result {
-        Err(_) => true,
-        Ok(line) => match (config.sysrefs.is_empty(), line.kvps.get_value(b"sysref")) {
-            (true, _) => true,
-            (false, Some(sr_from_line)) => config.sysrefs.iter().any(|sr| sr == &sr_from_line.as_ref()),
-            (false, None) => false
+    if parsed_line_result.is_err() { return true; }
+
+    let line = parsed_line_result.as_ref().unwrap();
+
+    // Do any date filters first, they are the most likely.
+    if config.from.is_some() || config.to.is_some() {
+        let date_slice = unsafe { std::str::from_utf8_unchecked(line.log_date) };
+        let date_in_line = string_to_utc_datetime_and_panic(date_slice);
+
+        if let Some(from_date) = config.from {
+            if date_in_line < from_date { return false; }
+        }
+
+        if let Some(to_date) = config.to {
+            if date_in_line > to_date { return false; }
         }
     }
+
+    // SysRef filter. User can specify list of sysrefs to pass through.
+    if !config.sysrefs.is_empty() {
+        let sr_from_line = line.kvps.get_value(b"sysref");
+        if sr_from_line.is_none() { return false; }
+        let sr_value = sr_from_line.unwrap();
+        return config.sysrefs.iter().any(|sr| sr == &sr_value.as_ref());
+    }
+
+    true
 }
 
 /// Look for the \r\n line endings in the file and return a vector of

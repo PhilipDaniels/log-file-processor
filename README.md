@@ -33,4 +33,3 @@ Q2952601,Q2952601,Q2967281,Q2952601,Q2967281,Q2975135,Q2967281,Q2970508,Q2967281
 * Persistent secure credentials
 * https://crates.io/crates/crypto_vault (try 'vault' and 'encrypt')
 * https://github.com/rust-keylock/rust-keylock-lib
-
