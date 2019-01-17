@@ -243,31 +243,31 @@ impl<'f> ParsedLine<'f> {
 pub fn string_to_utc_datetime(s: &str) -> Result<DateTime<Utc>, String> {
     // This is the standard LogDate pattern (albeit with up to 9 decimal places rather than 7).
     let dt = Utc.datetime_from_str(s, "%Y-%m-%d %H:%M:%S%.9f");
-    if !dt.is_err() { return Ok(dt.unwrap()); }
+    if dt.is_ok() { return Ok(dt.unwrap()); }
 
     // In case people start adding T's.
     let dt = Utc.datetime_from_str(s, "%Y-%m-%dT%H:%M:%S%.9f");
-    if !dt.is_err() { return Ok(dt.unwrap()); }
+    if dt.is_ok() { return Ok(dt.unwrap()); }
 
     let dt = Utc.datetime_from_str(s, "%Y-%m-%d %H:%M:%S");
-    if !dt.is_err() { return Ok(dt.unwrap()); }
+    if dt.is_ok() { return Ok(dt.unwrap()); }
 
     // NaiveDate becase we have no timezone information.
     let ndt = NaiveDate::parse_from_str(s, "%Y-%m-%d");
-    if !ndt.is_err() {
+    if ndt.is_ok() {
         let ndt = ndt.unwrap();
         return Ok(Utc.ymd(ndt.year(), ndt.month(), ndt.day()).and_hms(0, 0, 0));
     };
 
     // Similarly...
     let nt = NaiveTime::parse_from_str(s, "%H:%M:%S");
-    if !nt.is_err() {
+    if nt.is_ok() {
         let nt = nt.unwrap();
         return Ok(Utc::today().and_hms(nt.hour(), nt.minute(), nt.second()));
     }
 
     let nt = NaiveTime::parse_from_str(s, "%H:%M");
-    if !nt.is_err() {
+    if nt.is_ok() {
         let nt = nt.unwrap();
         return Ok(Utc::today().and_hms(nt.hour(), nt.minute(), 0));
     }
@@ -350,7 +350,7 @@ mod string_to_utc_datetime_tests {
     }
 
     #[test]
-    pub fn for_gibberisj() {
+    pub fn for_gibberish() {
         let dt = string_to_utc_datetime("dslkhg dhg");
         assert!(dt.is_err());
     }
